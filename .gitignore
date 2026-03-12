@@ -1,0 +1,9 @@
+﻿.env
+db.json
+node_modules/
+/tmp/
+*.mp4
+.claude/
+*.webp
+*.png
+!.gitkeep
