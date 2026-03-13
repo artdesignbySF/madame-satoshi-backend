@@ -1,6 +1,39 @@
 // --- START OF FILE frontend/script.js ---
 // [FINAL CLEANED VERSION - 2025-04-16c]
+
+// ── DEV MOCK MODE ──
+// Set to true when testing locally without a Lightning backend
+const DEV_MOCK = window.location.protocol === 'file:';
+
+const MOCK_STATE = {
+    balance: 137,
+    jackpot: 819,
+    cards: ['the-fool', 'the-sun', 'the-world'],
+    fortune: '⚡ The Fool steps boldly into the unknown. The Sun illuminates your path. The World signals completion. A cycle ends, a new one begins — stack accordingly.',
+};
+
+// ── DEV LOGGER ──
+const devLog = (() => {
+    if (!DEV_MOCK) return () => {};
+    const overlay = document.createElement('div');
+    overlay.id = 'dev-log-overlay';
+    overlay.style.cssText =
+        'position:fixed;bottom:0;left:0;right:0;max-height:180px;overflow-y:auto;' +
+        'background:rgba(0,20,0,0.88);color:#00ff88;font:11px/1.5 monospace;' +
+        'padding:4px 8px;z-index:9999;pointer-events:none;';
+    // document.addEventListener('DOMContentLoaded', () => document.body.appendChild(overlay));
+    return function devLog(msg, data) {
+        const ts = new Date().toISOString().slice(11, 23);
+        const line = document.createElement('div');
+        line.textContent = `[${ts}] ${msg}` + (data !== undefined ? ' ' + JSON.stringify(data) : '');
+        overlay.appendChild(line);
+        overlay.scrollTop = overlay.scrollHeight;
+        console.log(`[DEV] ${msg}`, ...(data !== undefined ? [data] : []));
+    };
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
+    devLog('DOM ready');
     // --- DOM Elements ---
     const updateWithdrawLinkButton = document.getElementById(
         "update-withdraw-link-button",
@@ -85,6 +118,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentDepositInvoice = ""; // New
     let currentDepositHash = null; // New
     let processingDepositHash = null; // ADD THIS LINE: Tracks a deposit being confirmed
+
+    // --- Tab Switching ---
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            // Deactivate all tabs
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            // Activate clicked tab
+            button.classList.add('active');
+            const tabId = 'tab-' + button.dataset.tab;
+            document.getElementById(tabId).classList.add('active');
+        });
+    });
 
     // --- Helper Functions ---
     function resetButtonState(enabled, text = null) {
@@ -872,21 +918,42 @@ document.addEventListener("DOMContentLoaded", () => {
             console.warn("Global hash mismatch on clear.");
         }
         try {
-            const response = await fetch(DRAW_CARDS_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId: sessionId }),
-            });
-            if (!response.ok) {
-                let e = `Oracle comms failed (${response.status})`;
-                try {
-                    const be = await response.json();
-                    e = be.error || e;
-                } catch (x) {}
-                throw new Error(e);
+            if (DEV_MOCK) {
+                // Mock draw response
+                devLog('DEV_MOCK: performCardDraw entered', { hash: confirmedPaymentHash.slice(0, 8) });
+                await new Promise((r) => setTimeout(r, 1000)); // Simulate network delay
+                MOCK_STATE.balance -= 21;
+                updateBalanceDisplay(MOCK_STATE.balance);
+                const mockData = {
+                    cards: MOCK_STATE.cards.map((cardName) => ({
+                        name: cardName.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                        image: cardName + ".webp",
+                        number: Math.floor(Math.random() * 22),
+                    })),
+                    fortune: MOCK_STATE.fortune,
+                    sats_won_this_round: 0,
+                    user_balance: MOCK_STATE.balance,
+                    current_jackpot: MOCK_STATE.jackpot,
+                };
+                devLog('DEV_MOCK: calling displayDrawResults', { balance: MOCK_STATE.balance, jackpot: MOCK_STATE.jackpot });
+                displayDrawResults(mockData);
+            } else {
+                const response = await fetch(DRAW_CARDS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sessionId: sessionId }),
+                });
+                if (!response.ok) {
+                    let e = `Oracle comms failed (${response.status})`;
+                    try {
+                        const be = await response.json();
+                        e = be.error || e;
+                    } catch (x) {}
+                    throw new Error(e);
+                }
+                const data = await response.json();
+                displayDrawResults(data);
             }
-            const data = await response.json();
-            displayDrawResults(data);
         } catch (error) {
             console.error("Card Draw Error:", error);
             if (fortuneDisplay) {
@@ -1240,6 +1307,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     async function initializeSession() {
         console.log("LOG: initializeSession called");
+        devLog('initializeSession', { existing: !!localStorage.getItem("madameSatoshiSessionId") });
         resetButtonState(false, "Initializing...");
         sessionId = localStorage.getItem("madameSatoshiSessionId") || null;
 
@@ -1277,34 +1345,47 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!sessionId) {
             console.log("LOG: No valid existing sessionId, fetching new one.");
             try {
-                const response = await fetch(SESSION_URL); // Fetches /api/session
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(
-                        `LOG: Session fetch failed: ${response.status}`,
-                        errorText,
+                if (DEV_MOCK) {
+                    // Mock session response
+                    devLog('DEV_MOCK: creating session');
+                    sessionId = "mock-session-" + Math.random().toString(36).substring(7);
+                    localStorage.setItem("madameSatoshiSessionId", sessionId);
+                    console.log("LOG: Mock session created:", sessionId);
+                    devLog('DEV_MOCK: session created', { sessionId });
+                    updateBalanceDisplay(MOCK_STATE.balance);
+                    resetButtonState(true, `Play (Use 21 Sats Balance)`);
+                    if (withdrawButton) withdrawButton.disabled = false;
+                    console.log("LOG: Buttons reset after mock session init.");
+                } else {
+                    const response = await fetch(SESSION_URL); // Fetches /api/session
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(
+                            `LOG: Session fetch failed: ${response.status}`,
+                            errorText,
+                        );
+                        throw new Error(
+                            `Session fetch failed: ${response.status}. ${errorText}`,
+                        );
+                    }
+                    const data = await response.json();
+                    if (!data.sessionId) {
+                        console.error(
+                            "LOG: No sessionId in response from /api/session",
+                            data,
+                        );
+                        throw new Error("No sessionId received.");
+                    }
+                    sessionId = data.sessionId;
+                    localStorage.setItem("madameSatoshiSessionId", sessionId);
+                    console.log(
+                        `LOG: New session ID: ${sessionId.substring(0, 6)}...`,
                     );
-                    throw new Error(
-                        `Session fetch failed: ${response.status}. ${errorText}`,
-                    );
+                    updateBalanceDisplay(0); // Initialize balance to 0 for new session
+                    if (withdrawButton) withdrawButton.disabled = true; // Withdraw disabled for new session with 0 balance
+                    resetButtonState(true, `Play (Pay ${PLAY_COST} Sats)`);
+                    console.log("LOG: Buttons reset after new session init.");
                 }
-                const data = await response.json();
-                if (!data.sessionId) {
-                    console.error(
-                        "LOG: No sessionId in response from /api/session",
-                        data,
-                    );
-                    throw new Error("No sessionId received.");
-                }
-                sessionId = data.sessionId;
-                localStorage.setItem("madameSatoshiSessionId", sessionId);
-                console.log(
-                    `LOG: New session ID: ${sessionId.substring(0, 6)}...`,
-                );
-                updateBalanceDisplay(0); // Initialize balance to 0 for new session
-                if (withdrawButton) withdrawButton.disabled = true; // Withdraw disabled for new session with 0 balance
-                resetButtonState(true, `Play (Pay ${PLAY_COST} Sats)`);
-                console.log("LOG: Buttons reset after new session init.");
             } catch (error) {
                 console.error("Error initializing new session:", error);
                 displayError(
@@ -1318,31 +1399,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     async function fetchBalance() {
         console.log("LOG: fetchBalance called");
+        devLog('fetchBalance', { sessionId: sessionId?.slice(0, 6) });
         if (!sessionId) {
             return;
         }
         const balanceUrl = BALANCE_URL_BASE + sessionId;
         try {
-            const response = await fetch(balanceUrl);
-            if (!response.ok) {
-                if (response.status === 404 || response.status === 400) {
-                    localStorage.removeItem("madameSatoshiSessionId");
-                    sessionId = null;
-                    displayError("Session expired.", false);
-                    resetButtonState(false, "Session Error");
-                    updateBalanceDisplay(0);
-                } else {
-                    console.error(
-                        `Server error check balance: ${response.status}.`,
-                    );
-                }
-                return;
-            }
-            const data = await response.json();
-            if (typeof data.balance === "number") {
-                updateBalanceDisplay(data.balance);
+            if (DEV_MOCK) {
+                // Mock balance response
+                devLog('DEV_MOCK: balance', { balance: MOCK_STATE.balance });
+                updateBalanceDisplay(MOCK_STATE.balance);
+                console.log("LOG: Mock balance updated:", MOCK_STATE.balance);
             } else {
-                updateBalanceDisplay(0);
+                const response = await fetch(balanceUrl);
+                if (!response.ok) {
+                    if (response.status === 404 || response.status === 400) {
+                        localStorage.removeItem("madameSatoshiSessionId");
+                        sessionId = null;
+                        displayError("Session expired.", false);
+                        resetButtonState(false, "Session Error");
+                        updateBalanceDisplay(0);
+                    } else {
+                        console.error(
+                            `Server error check balance: ${response.status}.`,
+                        );
+                    }
+                    return;
+                }
+                const data = await response.json();
+                if (typeof data.balance === "number") {
+                    updateBalanceDisplay(data.balance);
+                } else {
+                    updateBalanceDisplay(0);
+                }
             }
         } catch (error) {
             console.error(`Network error fetch balance:`, error);
@@ -1389,18 +1478,26 @@ document.addEventListener("DOMContentLoaded", () => {
         if (drawButton) {
             drawButton.addEventListener("click", async () => {
                 if (!sessionId || drawButton.disabled) return;
+                devLog('Draw click', { balance: currentWithdrawableBalance });
                 if (currentWithdrawableBalance >= PLAY_COST) {
                     /* Pay from Balance */ resetButtonState(
                         false,
                         "Using Balance...",
                     );
                     resetFortuneDisplay("Deducting sats...");
+                    devLog('Draw click: pay-from-balance branch');
                     try {
+                        if (DEV_MOCK) {
+                            devLog('DEV_MOCK: skipping fetch, routing to performCardDraw');
+                            await new Promise((r) => setTimeout(r, 300));
+                            await performCardDraw('mock0000mock0000mock0000mock0000mock0000mock0000mock0000mock0000');
+                        } else {
                         const r = await fetch(DRAW_FROM_BALANCE_URL, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ sessionId: sessionId }),
                         });
+                        devLog('fetch ←', { url: DRAW_FROM_BALANCE_URL, status: r.status });
                         if (!r.ok) {
                             let e = `Draw balance failed (${r.status})`;
                             try {
@@ -1411,7 +1508,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         const data = await r.json();
                         displayDrawResults(data);
+                        }
                     } catch (error) {
+                        devLog('ERROR draw-from-balance', { msg: error.message });
                         console.error("Error draw from balance:", error);
                         displayError(error.message || "Could not play.", false);
                         if (sessionId) {
@@ -1427,12 +1526,15 @@ document.addEventListener("DOMContentLoaded", () => {
                         "Generating Invoice...",
                     );
                     resetFortuneDisplay("Connecting to LN...");
+                    devLog('Draw click: invoice path');
                     paymentHash = null;
                     currentInvoiceString = "";
                     try {
+                        devLog('fetch →', { url: CREATE_INVOICE_URL });
                         const r = await fetch(CREATE_INVOICE_URL, {
                             method: "POST",
                         });
+                        devLog('fetch ←', { status: r.status });
                         if (!r.ok) {
                             let e = `Invoice creation failed (${r.status})`;
                             try {
@@ -1456,6 +1558,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         );
                         startInvoicePolling();
                     } catch (error) {
+                        devLog('ERROR invoice-creation', { msg: error.message });
                         console.error("Error invoice creation/fetch:", error);
                         paymentHash = null;
                         currentInvoiceString = "";
@@ -1523,6 +1626,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (depositButton) {
             depositButton.addEventListener("click", () => {
+                devLog('Deposit click');
                 if (!sessionId) {
                     // Ensure session exists
                     displayError(
@@ -1697,6 +1801,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (withdrawButton) {
             withdrawButton.addEventListener("click", () => {
+                devLog('Withdraw click', { balance: currentWithdrawableBalance });
                 console.log(
                     `LOG: Withdraw button clicked! Current Balance: ${currentWithdrawableBalance}, Button Disabled State: ${withdrawButton.disabled}`,
                 );
