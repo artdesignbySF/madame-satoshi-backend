@@ -8,3 +8,4 @@ node_modules/
 !interfaces/web/frontend/automaton/MadameSatoshi.webp
 *.png
 !.gitkeep
+CLAUDE.md
