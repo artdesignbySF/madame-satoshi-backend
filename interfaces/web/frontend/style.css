@@ -330,6 +330,8 @@ body {
 .social-link { color: #ffffff; font-size: 1.15rem; text-decoration: none; display: inline-block; transition: transform 0.15s ease, color 0.2s ease; }
 .social-link:hover { color: #e0b070; transform: scale(1.2); }
 .social-avatar { width: 1.6em; height: 1.6em; border-radius: 50%; object-fit: cover; display: block; border: 2px solid transparent; box-sizing: border-box; }
+.social-link[title="X (Twitter)"] { transform: translateY(-3px); }
+.social-link[title="Nostr"] img { transform: translateY(-3px); }
 
 /* ── MODALS ── */
 .modal-overlay { position: fixed; inset: 0; background-color: rgba(15,10,5,0.88); backdrop-filter: blur(5px); z-index: 900; display: flex; justify-content: center; align-items: flex-start; opacity: 0; visibility: hidden; transition: opacity 0.4s ease, visibility 0s linear 0.4s; padding: 20px 15px; overflow-y: auto; }
