@@ -809,6 +809,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             }
             let fortuneTxt = data.fortune;
+            if (data.is_first_play === true) {
+                fortuneTxt += '\n\n⚡ Beginners Luck! 11 sats added to your balance!';
+            }
             const isWin =
                 data.sats_won_this_round > 0 ||
                 fortuneTxt.toLowerCase().includes("jackpot") ||
@@ -1479,6 +1482,11 @@ document.addEventListener("DOMContentLoaded", () => {
             drawButton.addEventListener("click", async () => {
                 if (!sessionId || drawButton.disabled) return;
                 devLog('Draw click', { balance: currentWithdrawableBalance });
+                // Always switch to Fortune tab when Play is pressed
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector('.tab-button[data-tab="fortune"]').classList.add('active');
+                document.getElementById('tab-fortune').classList.add('active');
                 if (currentWithdrawableBalance >= PLAY_COST) {
                     /* Pay from Balance */ resetButtonState(
                         false,

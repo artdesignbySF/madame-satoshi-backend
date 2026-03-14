@@ -103,16 +103,17 @@ body {
     width: 100%;
     padding: 9px 20px;
     font-family: 'Patua One', Georgia, serif;
-    font-size: clamp(0.82rem, 2vw, 1rem);
+    font-size: clamp(1.05rem, 2.5vw, 1.3rem);
     font-weight: normal;
     color: #402810;
-    background: linear-gradient(145deg, #f8e0a0, #e8c070);
+    background: linear-gradient(90deg, #d4a843 0%, #f8e0a0 35%, #fff4c2 50%, #f8e0a0 65%, #d4a843 100%);
+    background-size: 200% auto;
     border: 2px solid #a07040;
     border-radius: 8px;
     cursor: pointer;
     transition: transform 0.15s ease, background 0.2s ease;
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    animation: pulse-button 2.5s infinite ease-in-out;
+    animation: pulse-button 2.5s infinite ease-in-out, shimmer 3s linear infinite;
 }
 #draw-button.pay-button:hover { background: linear-gradient(145deg, #fce8b0, #f0c880); animation-play-state: paused; }
 #draw-button.pay-button:active { transform: scale(0.98); }
@@ -120,6 +121,15 @@ body {
 @keyframes pulse-button {
     0%,100% { box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 0px  rgba(240,200,100,0.3); }
     50%      { box-shadow: 0 4px 8px rgba(0,0,0,0.5), 0 0 10px rgba(240,200,100,0.5); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+@keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.04); opacity: 0.85; }
 }
 
 /* ── TAB BAR ── */
@@ -140,7 +150,7 @@ body {
     border-radius: 6px;
     color: #c0a868;
     font-family: 'Patua One', Georgia, serif;
-    font-size: clamp(0.62rem, 1.5vw, 0.82rem);
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
     cursor: pointer;
     transition: all 0.2s ease;
     text-align: center;
@@ -154,17 +164,18 @@ body {
     flex: 0 1 auto;
     min-height: 80px;
     overflow: hidden;
+    overflow-y: auto;
     background: linear-gradient(145deg, rgba(20,14,8,0.97), rgba(10,7,4,0.97));
     border: 2px solid #a07040;
     border-radius: 8px;
 }
-.tab-content { display: none; padding: 10px; }
+.tab-content { display: none; padding: 12px; }
 .tab-content.active { display: block; }
 
 #fortune-display.oracle-screen {
     width: 100%;
     color: #e8d8b8;
-    font-size: clamp(0.8rem, 1.5vh, 0.95rem);
+    font-size: clamp(0.9rem, 1.8vh, 1.05rem);
     line-height: 1.4;
     font-family: 'Lora', Georgia, serif;
     text-align: center;
@@ -172,8 +183,8 @@ body {
     border: 1px solid rgba(180,140,80,0.25);
     border-radius: 5px;
     padding: 10px;
-    min-height: 60px;
-    overflow-y: auto;
+    min-height: 0;
+    max-height: none;
     opacity: 0;
     transition: opacity 0.5s ease-out, color 0.3s ease, transform 0.3s ease;
 }
@@ -182,19 +193,19 @@ body {
 @keyframes fadeInSimple { 0% { opacity:0; transform:translateY(8px); } 100% { opacity:1; transform:translateY(0); } }
 @keyframes fadeInWin { 0% { opacity:0; transform:scale(0.9) translateY(8px); } 70% { opacity:1; transform:scale(1.05) translateY(0); } 100% { opacity:1; transform:scale(1.02) translateY(0); } }
 
-#key-wins-display.key-wins h3 { font-family: 'Patua One', Georgia, serif; color: #e0b070; font-weight: normal; text-align: center; margin-bottom: 8px; font-size: 0.95rem; }
-.wins-table { width: 100%; border-collapse: collapse; font-size: clamp(0.62rem, 1.3vw, 0.76rem); }
-.wins-table th { font-family: 'Patua One', Georgia, serif; font-weight: normal; color: #e0b070; text-align: left; padding: 3px 5px; border-bottom: 1px solid rgba(180,140,80,0.4); }
-.wins-table td { padding: 4px 5px; vertical-align: top; border-bottom: 1px solid rgba(180,140,80,0.15); color: #b8a878; }
+#key-wins-display.key-wins h3 { font-family: 'Patua One', Georgia, serif; color: #e0b070; font-weight: normal; text-align: center; margin-bottom: 8px; font-size: 1.25rem; }
+.wins-table { width: 100%; border-collapse: collapse; font-size: clamp(0.9rem, 1.8vw, 1.05rem); }
+.wins-table th { font-family: 'Patua One', Georgia, serif; font-weight: normal; color: #e0b070; text-align: left; padding: 4px 8px; border: 1px solid rgba(180,140,80,0.4); }
+.wins-table td { padding: 5px 8px; vertical-align: top; border: 1px solid rgba(180,140,80,0.25); color: #b8a878; line-height: 1.7; }
 .wins-table tr:first-child td { color: #ffd700; font-weight: 600; }
 
 .verify-content { text-align: center; }
-.verify-message { color: #a09070; font-style: italic; font-size: 0.88rem; }
+.verify-message { color: #a09070; font-style: italic; font-size: 1rem; }
 .verify-details p { margin-bottom: 5px; font-size: 0.8rem; text-align: left; }
 .verify-details code { font-family: 'Courier New', monospace; font-size: 0.72rem; color: #c0b090; word-break: break-all; }
 .verify-details a { color: #c0a060; text-decoration: underline; }
 
-#instructions-area.instructions { color: #d8c8a8; font-size: clamp(0.72rem, 1.4vh, 0.86rem); line-height: 1.45; max-height: 300px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #a07040 rgba(20,14,8,0.8); }
+#instructions-area.instructions { color: #d8c8a8; font-size: clamp(0.9rem, 1.8vh, 1.05rem); line-height: 1.45; max-height: 300px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #a07040 rgba(20,14,8,0.8); }
 #instructions-area h3 { font-family: 'Patua One', Georgia, serif; color: #e0b070; text-align: center; margin-bottom: 8px; font-weight: normal; }
 #instructions-area ul { list-style: disc; margin-left: 16px; }
 #instructions-area li { margin-bottom: 5px; }
@@ -214,8 +225,8 @@ body {
     border-radius: 8px;
     text-align: center;
 }
-#jackpot-info.jackpot-area { font-family: 'Patua One', Georgia, serif; font-size: clamp(0.9rem, 1.8vh, 1.1rem); font-weight: normal; color: #fff5b0; text-shadow: 1px 1px 5px #000, 0 0 10px rgba(255,220,100,0.8); padding: 3px 0; transition: color 0.4s ease, text-shadow 0.4s ease; }
-#balance-info.balance-area { font-size: clamp(0.8rem, 1.5vh, 0.92rem); font-weight: 600; color: #c0b090; padding: 3px 0; border-top: 1px solid rgba(180,140,80,0.3); }
+#jackpot-info.jackpot-area { font-family: 'Patua One', Georgia, serif; font-size: clamp(0.9rem, 1.8vh, 1.1rem); font-weight: normal; color: #fff5b0; text-shadow: 1px 1px 5px #000, 0 0 10px rgba(255,220,100,0.8); padding: 3px 0; transition: color 0.4s ease, text-shadow 0.4s ease; animation: breathe 3s ease-in-out infinite; }
+#balance-info.balance-area { font-size: clamp(1rem, 2vh, 1.2rem); font-weight: 600; color: #c0b090; padding: 3px 0; border-top: 1px solid rgba(180,140,80,0.3); animation: breathe 3s ease-in-out infinite 1.5s; }
 @keyframes jackpotFlashAnim { 0%,100% { color:#fff5b0; text-shadow:1px 1px 5px #000,0 0 10px rgba(255,220,100,0.8); } 50% { color:#fff; text-shadow:1px 1px 3px #111,0 0 15px rgba(255,255,200,1); } }
 .jackpot-area.flash-update { animation: jackpotFlashAnim 0.8s ease-out; }
 @keyframes flashSuccessAnim { 0%,100% { background-color:transparent; transform:scale(1); } 50% { background-color:rgba(100,220,100,0.4); transform:scale(1.05); } }
@@ -234,7 +245,7 @@ body {
     flex: 1;
     padding: 8px 10px;
     font-family: 'Patua One', Georgia, serif;
-    font-size: clamp(0.75rem, 1.6vh, 0.92rem);
+    font-size: clamp(1rem, 2.2vh, 1.2rem);
     font-weight: normal;
     border-radius: 6px;
     border: 2px solid #a07040;
@@ -242,7 +253,7 @@ body {
     transition: all 0.2s ease;
     text-align: center;
 }
-#deposit-button.deposit-btn { color: #402810; background: linear-gradient(145deg, #f8e0a0, #e8c070); }
+#deposit-button.deposit-btn { color: #402810; background: linear-gradient(90deg, #d4a843 0%, #f8e0a0 35%, #fff4c2 50%, #f8e0a0 65%, #d4a843 100%); background-size: 200% auto; animation: shimmer 3s linear infinite 1.5s; }
 #deposit-button.deposit-btn:hover { background: linear-gradient(145deg, #fce8b0, #f0c880); }
 #withdraw-button.withdraw-btn { color: #c0e0c0; background: linear-gradient(145deg, #406040, #204020); border-color: #508050; opacity: 0.75; }
 #withdraw-button.withdraw-btn:hover:not(:disabled) { background: linear-gradient(145deg, #507050, #305030); opacity: 1; }
