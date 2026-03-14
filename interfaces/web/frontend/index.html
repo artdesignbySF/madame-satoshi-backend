@@ -18,6 +18,11 @@
                     <div class="eye-glow eye-glow-left"></div>
                     <div class="eye-glow eye-glow-right"></div>
                     <div id="card-display"></div>
+                    <button id="mute-button" title="Toggle Sound"
+                        style="position:absolute;top:8px;left:8px;z-index:10;
+                        background:rgba(0,0,0,0.5);border:1px solid rgba(160,112,64,0.5);
+                        border-radius:6px;cursor:pointer;font-size:1.1rem;
+                        color:#e0b070;padding:3px 7px;line-height:1;">🔊</button>
                 </div>
             </div>
 
@@ -44,17 +49,17 @@
                             <tbody>
                                 <tr>
                                     <td>Jackpot</td>
-                                    <td>Sun (XVIII) + World (XX) + Magician (I)</td>
+                                    <td>Sun + World + Magician</td>
                                     <td>Entire Pool</td>
                                 </tr>
                                 <tr>
                                     <td>Major</td>
-                                    <td>Sun+World+Ace<br/>Emp+Empress+Str<br/>Star+Sun+Temp<br/>Mag+Lovers+World<br/>Emp+Emperor+Lovers<br/>Sun+Lovers+Ace<br/>Wheel+Lovers+Mag<br/>Star+Sun+Lovers<br/>Justice+Wheel+Star<br/>Hermit+Star+Lovers<br/>Emp+World+Star</td>
+                                    <td>Sun + World + Ace of Pentacles<br/>Emperor + Empress + Strength<br/>Star + Sun + Temperance<br/>Magician + Lovers + World<br/>Empress + Emperor + Lovers<br/>Sun + Lovers + Ace of Pentacles<br/>Wheel of Fortune + Lovers + Magician<br/>Star + Sun + Lovers<br/>Justice + Wheel of Fortune + Star<br/>Hermit + Star + Lovers<br/>Empress + World + Star</td>
                                     <td>~35% Pool</td>
                                 </tr>
                                 <tr>
                                     <td>Minor</td>
-                                    <td>Ace+Wheel<br/>Chariot+Str<br/>Sun+Lovers<br/>World+Lovers<br/>Mag+Star<br/>Emp+Lovers<br/>Justice+Wheel<br/>Hermit+World<br/>Emp+Mag</td>
+                                    <td>Ace of Pentacles + Wheel of Fortune<br/>Chariot + Strength<br/>Sun + Lovers<br/>World + Lovers<br/>Magician + Star<br/>Empress + Lovers<br/>Justice + Wheel of Fortune<br/>Hermit + World<br/>Empress + Magician</td>
                                     <td>~15% Pool</td>
                                 </tr>
                             </tbody>
@@ -68,8 +73,12 @@
                             <p><strong>Block Height:</strong> <span id="verify-block-height">Unknown</span></p>
                             <p><strong>Block Hash:</strong> <code id="verify-block-hash">Unknown</code></p>
                             <p><strong>Seed:</strong> <code id="verify-seed">Unknown</code></p>
-                            <p><strong>Cards:</strong> <span id="verify-cards">Unknown</span></p>
                             <p><a id="verify-mempool-link" href="#" target="_blank">View on Mempool</a></p>
+                            <p style="margin-top:12px;font-size:0.85rem;">
+                                <a href="#" onclick="document.querySelector('.tab-button[data-tab=\'help\']').click(); setTimeout(() => { document.getElementById('how-to-verify').scrollIntoView({behavior:'smooth'}); }, 100); return false;" style="color:#c0a060;text-decoration:underline;">
+                                    How to verify this yourself →
+                                </a>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -99,6 +108,27 @@
                                 to get a LNURL withdrawal QR code.
                             </li>
                         </ul>
+                        <div id="how-to-verify" style="margin-top:12px;border-top:1px solid rgba(180,140,80,0.3);padding-top:10px;">
+                            <h3>How To Verify</h3>
+                            <ol>
+                                <li>Click the Verify tab to get your Block Hash and Seed.</li>
+                                <li>Check the block hash at <a href="https://mempool.space" target="_blank" style="color:#c0a060;">mempool.space</a></li>
+                                <li>Run this in your terminal to confirm the seed:</li>
+                            </ol>
+                            <details style="margin-top:8px;">
+                                <summary style="cursor:pointer;color:#c0a060;">Show verification code</summary>
+                                <pre id="verify-code-block" style="background:rgba(0,0,0,0.4);padding:10px;border-radius:4px;font-size:0.72rem;color:#c0b090;overflow-x:auto;margin-top:8px;white-space:pre-wrap;word-break:break-all;">node -e "
+const crypto = require('crypto');
+const seed = crypto.createHash('sha256')
+  .update('BLOCK_HASH' + 'SESSION_ID' + 'TIMESTAMP')
+  .digest('hex');
+console.log('Seed:', parseInt(seed.substring(0,8), 16));"</pre>
+                                <button onclick="navigator.clipboard.writeText(document.getElementById('verify-code-block').textContent).then(() => this.textContent='Copied!').catch(() => {}); setTimeout(() => this.textContent='Copy code', 1500);"
+                                    style="margin-top:6px;padding:4px 12px;font-size:0.8rem;cursor:pointer;background:rgba(160,112,64,0.3);border:1px solid #a07040;border-radius:4px;color:#c0a868;">
+                                    Copy code
+                                </button>
+                            </details>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -129,7 +159,7 @@
                   <img src="https://raw.githubusercontent.com/mbarulli/nostr-logo/refs/heads/main/PNG/nostr-icon-white-on-black-256x256.png" class="social-avatar" alt="Nostr" />
                 </a>
                 <a href="https://plebroyale.com" class="social-link" title="Personal Site" target="_blank" rel="noopener">
-                  <img src="automaton/PlebRoyale-Logo-zwart.svg" class="social-avatar" alt="Plebroyale" style="width: 2.5em; height: 2.5em; border-radius: 0;" />
+                  <img src="automaton/PlebRoyale-Logo-zwart.svg" class="social-avatar" alt="Plebroyale" style="width: 1.6em; height: 1.6em; border-radius: 0; filter: invert(1);" />
                 </a>
             </div>
 

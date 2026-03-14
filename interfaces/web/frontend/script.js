@@ -12,6 +12,9 @@ const MOCK_STATE = {
     fortune: '⚡ The Fool steps boldly into the unknown. The Sun illuminates your path. The World signals completion. A cycle ends, a new one begins — stack accordingly.',
 };
 
+// ── SOUND SYSTEM ──
+const MUTED = { value: localStorage.getItem('madameSatoshiMuted') === 'true' };
+
 // ── DEV LOGGER ──
 const devLog = (() => {
     if (!DEV_MOCK) return () => {};
@@ -34,11 +37,29 @@ const devLog = (() => {
 
 document.addEventListener("DOMContentLoaded", () => {
     devLog('DOM ready');
+    // Initialise sounds
+    const sounds = {
+        play:      new Audio('sounds/Play-button.wav'),
+        cardSlide: new Audio('sounds/card-slide.wav'),
+        cardFlip:  new Audio('sounds/card-flip.ogg'),
+        win:       new Audio('sounds/jackpot-major-minor-wins.wav'),
+        tab:       new Audio('sounds/tab-button.wav'),
+        deposit:   new Audio('sounds/coinflip.wav'),
+        button:    new Audio('sounds/standardbuttonpress.wav'),
+    };
+    function playSound(name) {
+        if (MUTED.value) return;
+        const s = sounds[name];
+        if (!s) return;
+        s.currentTime = 0;
+        s.play().catch(() => {});
+    }
     // --- DOM Elements ---
     const updateWithdrawLinkButton = document.getElementById(
         "update-withdraw-link-button",
     );
     const drawButton = document.getElementById("draw-button");
+    const cabinetHeader = document.querySelector('.cabinet-header');
     const cardDisplay = document.getElementById("card-display");
     const fortuneDisplay = document.getElementById("fortune-display");
     const jackpotInfo = document.getElementById("jackpot-info");
@@ -121,7 +142,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- Tab Switching ---
     document.querySelectorAll('.tab-button').forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
+            playSound('tab');
             // Deactivate all tabs
             document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -129,6 +151,36 @@ document.addEventListener("DOMContentLoaded", () => {
             button.classList.add('active');
             const tabId = 'tab-' + button.dataset.tab;
             document.getElementById(tabId).classList.add('active');
+            // If verify tab clicked, fetch verify data
+            if (button.dataset.tab === 'verify') {
+                if (!sessionId) return;
+                const verifyDetails = document.querySelector('.verify-details');
+                const verifyMessage = document.querySelector('.verify-message');
+                try {
+                    const response = await fetch(`/api/verify/${sessionId}`);
+                    if (!response.ok) {
+                        if (verifyMessage) verifyMessage.textContent = 'No draws found for this session yet.';
+                        if (verifyDetails) verifyDetails.style.display = 'none';
+                        return;
+                    }
+                    const data = await response.json();
+                    document.getElementById('verify-block-height').textContent = data.blockHeight;
+                    document.getElementById('verify-block-hash').textContent = data.blockHash;
+                    document.getElementById('verify-seed').textContent = data.seed;
+                    const link = document.getElementById('verify-mempool-link');
+                    link.href = data.mempoolUrl;
+                    link.textContent = 'View block on Mempool.space';
+                    if (verifyDetails) verifyDetails.style.display = 'block';
+                    if (verifyMessage) verifyMessage.style.display = 'none';
+                    // Update the verification code block with real values
+                    const codeBlock = document.getElementById('verify-code-block');
+                    if (codeBlock) {
+                        codeBlock.textContent = `node -e "\nconst crypto = require('crypto');\nconst seed = crypto.createHash('sha256')\n  .update('${data.blockHash}' + '${sessionId}' + '${data.timestamp}')\n  .digest('hex');\nconsole.log('Seed:', parseInt(seed.substring(0,8), 16));"`;
+                    }
+                } catch (error) {
+                    if (verifyMessage) verifyMessage.textContent = 'Could not load verify data.';
+                }
+            }
         });
     });
 
@@ -143,11 +195,31 @@ document.addEventListener("DOMContentLoaded", () => {
     function createSingleCard(cardData) {
         const el = document.createElement("div");
         el.classList.add("card");
-        const img = document.createElement("img");
-        img.src = `cards/${cardData.image}`;
-        img.alt = cardData.name;
-        img.title = cardData.name;
-        el.appendChild(img);
+
+        // Card inner wrapper for 3D flip
+        const inner = document.createElement("div");
+        inner.classList.add("card-inner");
+
+        // Back face
+        const back = document.createElement("div");
+        back.classList.add("card-face", "card-back");
+        const backImg = document.createElement("img");
+        backImg.src = "cards/card-back.webp";
+        backImg.alt = "Card Back";
+        back.appendChild(backImg);
+
+        // Front face
+        const front = document.createElement("div");
+        front.classList.add("card-face", "card-front");
+        const frontImg = document.createElement("img");
+        frontImg.src = `cards/${cardData.image}`;
+        frontImg.alt = cardData.name;
+        frontImg.title = cardData.name;
+        front.appendChild(frontImg);
+
+        inner.appendChild(back);
+        inner.appendChild(front);
+        el.appendChild(inner);
         return el;
     }
     function displayError(
@@ -802,10 +874,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 data.cards.forEach((c, i) => {
                     const el = createSingleCard(c);
                     cardDisplay.appendChild(el);
-                    const d = 50 + i * 200,
-                        a = 800;
-                    setTimeout(() => el.classList.add("is-visible"), d);
-                    cardAnimDur = Math.max(cardAnimDur, d + a);
+                    const appearDelay = 50 + i * 300;
+                    const flipDelay = appearDelay + 600;
+                    setTimeout(() => { el.classList.add("is-visible"); playSound('cardSlide'); }, appearDelay);
+                    setTimeout(() => { el.classList.add("is-flipped"); playSound('cardFlip'); }, flipDelay);
+                    cardAnimDur = Math.max(cardAnimDur, flipDelay + 700);
                 });
             }
             let fortuneTxt = data.fortune;
@@ -824,7 +897,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         fortuneDisplay.textContent = fortuneTxt;
                         fortuneDisplay.classList.remove("fortune-win");
                         fortuneDisplay.style.color = "";
-                        if (isWin) fortuneDisplay.classList.add("fortune-win");
+                        if (isWin) { fortuneDisplay.classList.add("fortune-win"); playSound('win'); }
                         fortuneDisplay.classList.add("fortune-visible");
                         fortuneDisplay.style.opacity = "1";
                     }, 300);
@@ -839,6 +912,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateBalanceDisplay(data.user_balance);
             }
         } finally {
+            if (cabinetHeader) cabinetHeader.classList.remove('drawing');
+            drawButton.classList.remove('drawing-state');
             if (sessionId) {
                 resetButtonState(true);
             } else {
@@ -893,6 +968,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (sessionId) updateBalanceDisplay(currentWithdrawableBalance);
             return;
         }
+        if (cabinetHeader) cabinetHeader.classList.add('drawing');
+        drawButton.classList.add('drawing-state');
         resetButtonState(false, "Drawing...");
         resetFortuneDisplay("Payment Successful! Consulting the Oracle...");
         if (fortuneDisplay) {
@@ -1443,6 +1520,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     function setupEventListeners() {
         console.log("LOG: setupEventListeners called");
+        const muteButton = document.getElementById('mute-button');
+        if (muteButton) {
+            muteButton.textContent = MUTED.value ? '🔇' : '🔊';
+            muteButton.addEventListener('click', () => {
+                MUTED.value = !MUTED.value;
+                localStorage.setItem('madameSatoshiMuted', MUTED.value);
+                muteButton.textContent = MUTED.value ? '🔇' : '🔊';
+            });
+        }
         if (depositAmountInputField && generateDepositInvoiceButton) {
             depositAmountInputField.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" || event.keyCode === 13) {
@@ -1463,6 +1549,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (updateWithdrawLinkButton) {
             updateWithdrawLinkButton.addEventListener("click", () => {
+                playSound('button');
                 console.log("Update Withdraw Link button clicked.");
                 // Optional: Add brief visual feedback like disabling the button
                 updateWithdrawLinkButton.disabled = true;
@@ -1481,6 +1568,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (drawButton) {
             drawButton.addEventListener("click", async () => {
                 if (!sessionId || drawButton.disabled) return;
+                playSound('play');
                 devLog('Draw click', { balance: currentWithdrawableBalance });
                 // Always switch to Fortune tab when Play is pressed
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
@@ -1595,14 +1683,16 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
         if (modalCloseButton) {
-            modalCloseButton.addEventListener("click", () =>
-                hidePaymentModal("modalCloseButton"),
-            );
+            modalCloseButton.addEventListener("click", () => {
+                playSound('button');
+                hidePaymentModal("modalCloseButton");
+            });
         }
         if (withdrawModalCloseButton) {
-            withdrawModalCloseButton.addEventListener("click", () =>
-                hideWithdrawModal("withdrawModalCloseButton"),
-            );
+            withdrawModalCloseButton.addEventListener("click", () => {
+                playSound('button');
+                hideWithdrawModal("withdrawModalCloseButton");
+            });
         }
         document.addEventListener("click", (event) => {
             if (
@@ -1634,6 +1724,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (depositButton) {
             depositButton.addEventListener("click", () => {
+                playSound('deposit');
                 devLog('Deposit click');
                 if (!sessionId) {
                     // Ensure session exists
@@ -1649,12 +1740,14 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Init Error: Deposit button not found!");
         }
         if (depositModalCloseButton) {
-            depositModalCloseButton.addEventListener("click", () =>
-                hideDepositModal("depositModalCloseButton"),
-            );
+            depositModalCloseButton.addEventListener("click", () => {
+                playSound('button');
+                hideDepositModal("depositModalCloseButton");
+            });
         }
         if (generateDepositInvoiceButton) {
             generateDepositInvoiceButton.addEventListener("click", async () => {
+                playSound('button');
                 if (!sessionId || !depositAmountInputField || !depositStatus)
                     return;
 
@@ -1809,6 +1902,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (withdrawButton) {
             withdrawButton.addEventListener("click", () => {
+                playSound('button');
                 devLog('Withdraw click', { balance: currentWithdrawableBalance });
                 console.log(
                     `LOG: Withdraw button clicked! Current Balance: ${currentWithdrawableBalance}, Button Disabled State: ${withdrawButton.disabled}`,
