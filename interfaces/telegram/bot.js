@@ -6,10 +6,7 @@ const sharp = require("sharp");
 const fs = require("fs");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
-const { drawCards, calculateFortune, generateBlockSeed } = require('../../core/fortuneLogic');
-const { loadDb, saveDb, getUserBalance, updateUserBalance, getJackpot, updateJackpot, hasReceivedBonus, markBonusReceived } = require('../../core/db');
-const { getLatestBlockHash, getCachedBlockInfo } = require('../../core/blockSeed');
-const { createInvoice, checkInvoicePaid, transferToProfitWallet, topUpPayoutWalletReserve, PAYOUT_RESERVE_SATS } = require('../../core/lnbits');
+const { drawCards, calculateFortune, generateBlockSeed } = require("../../core/fortuneLogic.js");
 
 // Setup FFmpeg path for fluent-ffmpeg
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -60,14 +57,139 @@ const STICKER_MAP = {
 if (!BOT_TOKEN) { console.error("MISSING: TELEGRAM_BOT_TOKEN"); process.exit(1); }
 if (!LNBITS_URL || !LNBITS_MAIN_INVOICE_KEY) { console.error("MISSING: LNbits config"); process.exit(1); }
 
+// --- Simple JSON file DB ---
+const DB_FILE = "./db.json";
+function loadDb() {
+  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "{}");
+  try { return JSON.parse(fs.readFileSync(DB_FILE, "utf8")); } catch { return {}; }
+}
+function saveDb(data) { fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2)); }
+function dbGet(key) { return loadDb()[key] ?? null; }
+function dbSet(key, value) { const d = loadDb(); d[key] = value; saveDb(d); }
+function dbDelete(key) { const d = loadDb(); delete d[key]; saveDb(d); }
+
+// --- DB Helpers ---
+function getUserBalance(userId) { return Math.max(0, parseInt(dbGet(`balance_${userId}`) || 0)); }
+function updateUserBalance(userId, amount) {
+  const next = Math.max(0, getUserBalance(userId) + Math.floor(amount));
+  dbSet(`balance_${userId}`, next); return next;
+}
+function getJackpot() { return Math.max(0, parseInt(dbGet(JACKPOT_DB_KEY) || 0)); }
+function updateJackpot(amount) {
+  const next = Math.max(0, getJackpot() + Math.floor(amount));
+  dbSet(JACKPOT_DB_KEY, next); return next;
+}
+function hasReceivedBonus(userId) { return dbGet(`bonus_given_${userId}`) === true; }
+function markBonusReceived(userId) { dbSet(`bonus_given_${userId}`, true); }
+
+if (getJackpot() <= 0) { updateJackpot(MIN_JACKPOT_SEED); console.log(`Jackpot seeded: ${MIN_JACKPOT_SEED} sats`); }
+
+// --- Block Hash Fetching ---
+let cachedBlockInfo = { height: null, hash: null, timestamp: null };
+
+async function getLatestBlockHash() {
+  try {
+    const url = MEMPOOL_URL + '/api/blocks/tip/hash';
+    console.log(`Fetching block hash from: ${url}`);
+    const [hashRes, heightRes] = await Promise.all([
+      axios.get(url, { timeout: 5000 }),
+      axios.get(MEMPOOL_URL + '/api/blocks/tip/height', { timeout: 5000 })
+    ]);
+    const hash = hashRes.data.trim();
+    const height = heightRes.data;
+    console.log(`Block hash fetched: #${height} ${hash}`);
+    cachedBlockInfo = { hash, height, timestamp: Date.now() };
+    return hash;
+  } catch (error) {
+    console.log(`Block hash fetch failed: ${error.message}`);
+    return null;
+  }
+}
+
 // --- Bot ---
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-
+// Initialize payout wallet reserve and cache block hash on startup
+(async () => {
+  console.log("Checking payout wallet reserve...");
+  await topUpPayoutWalletReserve();
+  console.log("Fetching latest block hash...");
+  await getLatestBlockHash();
+})().catch(e => console.error("Startup check failed:", e));
 const pendingInvoices = {};
 const awaitingDepositAmount = new Set();
 const awaitingWithdrawInvoice = new Set();
 const activeDraws = new Set();
+
+// --- LNbits ---
+async function createInvoice(amountSats, memo) {
+  const res = await axios.post(`${LNBITS_URL}/api/v1/payments`,
+    { out: false, amount: amountSats, memo },
+    { headers: { "X-Api-Key": LNBITS_MAIN_INVOICE_KEY }, timeout: 15000 });
+  if (!res.data?.payment_hash || !res.data?.payment_request) throw new Error("Bad LNbits invoice response");
+  return { hash: res.data.payment_hash, bolt11: res.data.payment_request };
+}
+
+async function checkInvoicePaid(hash) {
+  const res = await axios.get(`${LNBITS_URL}/api/v1/payments/${hash}`,
+    { headers: { "X-Api-Key": LNBITS_MAIN_INVOICE_KEY }, timeout: 10000 });
+  return res.data?.paid === true;
+}
+
+async function transferToProfitWallet(amount, memo) {
+  if (!LNBITS_PROFIT_ADMIN_KEY || amount <= 0) return;
+  try {
+    const inv = await axios.post(`${LNBITS_URL}/api/v1/payments`,
+      { out: false, amount, memo },
+      { headers: { "X-Api-Key": LNBITS_PROFIT_ADMIN_KEY }, timeout: 15000 });
+    await axios.post(`${LNBITS_URL}/api/v1/payments`,
+      { out: true, bolt11: inv.data.payment_request },
+      { headers: { "X-Api-Key": LNBITS_MAIN_ADMIN_KEY }, timeout: 45000 });
+  } catch (e) { console.error("Profit transfer failed (non-fatal):", e.message); }
+}
+
+// --- Payout Wallet Reserve Management ---
+const PAYOUT_RESERVE_SATS = 100;
+
+async function getPayoutWalletBalance() {
+  try {
+    const res = await axios.get(`${LNBITS_URL}/api/v1/wallet`,
+      { headers: { "X-Api-Key": LNBITS_PAYOUT_ADMIN_KEY }, timeout: 10000 });
+    return Math.max(0, Math.floor(res.data?.balance || 0) / 1000);
+  } catch (e) {
+    console.error("Failed to check payout wallet balance:", e.message);
+    return null;
+  }
+}
+
+async function topUpPayoutWalletReserve() {
+  try {
+    const balance = await getPayoutWalletBalance();
+    if (balance === null) {
+      console.warn("Could not check payout wallet balance, skipping reserve top-up");
+      return;
+    }
+    console.log(`Payout wallet balance: ${balance.toFixed(3)} sats`);
+    if (balance < PAYOUT_RESERVE_SATS) {
+      const shortfall = Math.ceil(PAYOUT_RESERVE_SATS - balance);
+      console.log(`Payout reserve below target. Current: ${balance.toFixed(3)} sats, shortfall: ${shortfall} sats (rounded up)`);
+      if (shortfall >= 1) {
+        console.log(`Topping up payout wallet: funding ${shortfall} sats to reach ${PAYOUT_RESERVE_SATS} sats`);
+        const inv = await axios.post(`${LNBITS_URL}/api/v1/payments`,
+          { out: false, amount: shortfall, memo: "Reserve top-up" },
+          { headers: { "X-Api-Key": LNBITS_PAYOUT_ADMIN_KEY }, timeout: 15000 });
+        await axios.post(`${LNBITS_URL}/api/v1/payments`,
+          { out: true, bolt11: inv.data.payment_request },
+          { headers: { "X-Api-Key": LNBITS_MAIN_ADMIN_KEY }, timeout: 45000 });
+        console.log(`Payout wallet reserve top-up successful`);
+      } else {
+        console.log(`Reserve shortfall < 1 sat, skipping top-up (reserve close enough to target)`);
+      }
+    }
+  } catch (e) {
+    console.warn(`Payout wallet reserve top-up failed (non-fatal): ${e.message}`);
+  }
+}
 
 // --- Keyboards ---
 function mainKeyboard(userId) {
@@ -391,7 +513,7 @@ async function performDraw(chatId, userId) {
 
     const fpDb = loadDb();
     fpDb[`draw_verify_${userId}`] = {
-      blockHeight: getCachedBlockInfo().height,
+      blockHeight: cachedBlockInfo.height,
       blockHash: fpBlockHash,
       cards: fpCards.map(c => c.number),
       timestamp: fpTimestamp
@@ -462,7 +584,7 @@ async function performDraw(chatId, userId) {
   // Store verification data (block hash, cards, timestamp)
   const db = loadDb();
   db[`draw_verify_${userId}`] = {
-    blockHeight: getCachedBlockInfo().height,
+    blockHeight: cachedBlockInfo.height,
     blockHash: blockHash,
     cards: cards.map(c => c.number),
     timestamp: timestamp
@@ -835,9 +957,9 @@ bot.onText(/\/msblock/, async (msg) => {
   if (userId !== ADMIN_ID) return bot.sendMessage(chatId, "❌ Access denied. Admins only!");
 
   const blockMessage = `*Latest Block Info*\n\n` +
-    `🔗 Block Height: ${getCachedBlockInfo().height || 'Unknown'}\n` +
-    `📜 Block Hash:\n\`${getCachedBlockInfo().hash || 'Unknown'}\`\n` +
-    `⏰ Last Updated: ${getCachedBlockInfo().timestamp ? new Date(getCachedBlockInfo().timestamp).toLocaleString() : 'N/A'}`;
+    `🔗 Block Height: ${cachedBlockInfo.height || 'Unknown'}\n` +
+    `📜 Block Hash:\n\`${cachedBlockInfo.hash || 'Unknown'}\`\n` +
+    `⏰ Last Updated: ${cachedBlockInfo.timestamp ? new Date(cachedBlockInfo.timestamp).toLocaleString() : 'N/A'}`;
 
   bot.sendMessage(chatId, blockMessage, { parse_mode: 'Markdown' });
 });
@@ -998,3 +1120,4 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
+console.log("✅ Madame Satoshi Bot is running!");
