@@ -376,8 +376,7 @@ const createWithdrawalRouter = (db, config) => {
                 ` -> NEW LNURL Withdraw Link generated. ID: ${newGeneratedLinkId}`,
             );
 
-            const feeBuffer = Math.max(2, Math.ceil(amountToWithdraw * 0.02));
-            const amountToPreFundToPayout = amountToWithdraw + feeBuffer;
+            const amountToPreFundToPayout = amountToWithdraw;
             const transferMemo = `Funding LNURL ${newGeneratedLinkId} (${amountToWithdraw}sats) for session ${sessionId.substring(0, 6)}`;
 
             await attemptInternalTransfer(

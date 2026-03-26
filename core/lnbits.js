@@ -74,11 +74,31 @@ async function topUpPayoutWalletReserve() {
   }
 }
 
+async function drainExcessPayoutWallet() {
+    try {
+        const balance = await getPayoutWalletBalance();
+        if (balance === null) return;
+        const excess = Math.floor(balance - PAYOUT_RESERVE_SATS);
+        if (excess < 10) return; // Only drain if meaningful excess
+        console.log(`Draining excess payout wallet: ${excess} sats back to main`);
+        const inv = await axios.post(`${LNBITS_URL}/api/v1/payments`,
+            { out: false, amount: excess, memo: 'Drain excess payout to main' },
+            { headers: { 'X-Api-Key': LNBITS_MAIN_ADMIN_KEY }, timeout: 15000 });
+        await axios.post(`${LNBITS_URL}/api/v1/payments`,
+            { out: true, bolt11: inv.data.payment_request },
+            { headers: { 'X-Api-Key': LNBITS_PAYOUT_ADMIN_KEY }, timeout: 45000 });
+        console.log(`Drained ${excess} sats from payout wallet to main.`);
+    } catch (e) {
+        console.warn(`Payout wallet drain failed (non-fatal): ${e.message}`);
+    }
+}
+
 module.exports = {
   createInvoice,
   checkInvoicePaid,
   transferToProfitWallet,
   getPayoutWalletBalance,
   topUpPayoutWalletReserve,
+  drainExcessPayoutWallet,
   PAYOUT_RESERVE_SATS
 };

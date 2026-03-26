@@ -393,7 +393,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function hideDepositModal(reason = "unknown") {
         if (!depositModal) return;
-        // Optional: Stop any polling related to deposit if implemented later
+        if (window.activeDepositPollId) {
+            clearInterval(window.activeDepositPollId);
+            window.activeDepositPollId = null;
+        }
         depositModal.classList.remove("is-visible");
         setTimeout(() => {
             depositModal.style.display = "none";
@@ -631,6 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Create a unique interval ID for this specific polling instance
         const currentPollingIntervalId = setInterval(async () => {
+            if (!currentPollingIntervalId) return;
             if (processingDepositHash === pollingForDepositHash) {
                 // Already actively processing this payment hash, let the first instance complete.
                 // This check helps prevent race conditions if the interval fires very quickly
@@ -703,10 +707,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }, POLLING_INTERVAL_MS);
 
-        // Store this interval ID if you need to clear it from outside (e.g., when modal is closed manually)
-        // For example, you could have a global: window.activeDepositPollId = currentPollingIntervalId;
-        // Then, in hideDepositModal or when a new deposit is generated:
-        // if(window.activeDepositPollId) clearInterval(window.activeDepositPollId); window.activeDepositPollId = null;
+        window.activeDepositPollId = currentPollingIntervalId;
     }
     function stopLnurlClaimPolling(reason = "unknown") {
         if (lnurlClaimPollingIntervalId || lnurlClaimPollingTimeoutId) {

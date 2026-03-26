@@ -9,7 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const { drawCards, calculateFortune, generateBlockSeed } = require('../../core/fortuneLogic');
 const { loadDb, saveDb, dbGet, dbSet, dbDelete, getUserBalance, updateUserBalance, getJackpot, updateJackpot, hasReceivedBonus, markBonusReceived } = require('../../core/db');
 const { getLatestBlockHash, getCachedBlockInfo } = require('../../core/blockSeed');
-const { createInvoice, checkInvoicePaid, transferToProfitWallet, topUpPayoutWalletReserve } = require('../../core/lnbits');
+const { createInvoice, checkInvoicePaid, transferToProfitWallet, getPayoutWalletBalance, topUpPayoutWalletReserve, drainExcessPayoutWallet } = require('../../core/lnbits');
 const createWithdrawalRouter = require('./withdrawalRoutes');
 
 const app = express();
@@ -91,6 +91,12 @@ app.post('/api/draw', async (req, res) => {
       const newBalance = updateUserBalance(sessionId, FIRST_PLAY_BONUS_SATS);
       markBonusReceived(sessionId);
 
+      try {
+          await transferToProfitWallet(PROFIT_AMOUNT, `Profit session ${sessionId.substring(0, 6)}`);
+      } catch (e) {
+          console.error('Profit transfer failed (non-fatal):', e.message);
+      }
+
       // Store verification data
       const db = loadDb();
       db[`draw_verify_${sessionId}`] = {
@@ -107,6 +113,7 @@ app.post('/api/draw', async (req, res) => {
         cards,
         fortune,
         sats_won_this_round: FIRST_PLAY_BONUS_SATS,
+        is_first_play: true,
         user_balance: newBalance,
         current_jackpot: getJackpot(),
         verify: {
@@ -142,6 +149,18 @@ app.post('/api/draw', async (req, res) => {
       updateJackpot(-sats_won);
       broadcastJackpotUpdate();
       updateUserBalance(sessionId, sats_won);
+    }
+
+    try {
+      await topUpPayoutWalletReserve();
+    } catch (e) {
+      console.warn('Reserve top-up failed (non-fatal):', e.message);
+    }
+
+    try {
+      await drainExcessPayoutWallet();
+    } catch (e) {
+      console.warn('Payout drain failed (non-fatal):', e.message);
     }
 
     // Store verification data
@@ -186,6 +205,11 @@ app.post('/api/draw-from-balance', async (req, res) => {
 
     updateUserBalance(sessionId, -PAYMENT_AMOUNT_SATS);
     updateJackpot(JACKPOT_CONTRIBUTION);
+    try {
+      await transferToProfitWallet(PROFIT_AMOUNT, `Profit session ${sessionId.substring(0, 6)}`);
+    } catch (e) {
+      console.error('Profit transfer failed (non-fatal):', e.message);
+    }
     broadcastJackpotUpdate();
 
     const blockHash = await getLatestBlockHash();
@@ -202,6 +226,18 @@ app.post('/api/draw-from-balance', async (req, res) => {
       updateJackpot(-sats_won);
       broadcastJackpotUpdate();
       updateUserBalance(sessionId, sats_won);
+    }
+
+    try {
+      await topUpPayoutWalletReserve();
+    } catch (e) {
+      console.warn('Reserve top-up failed (non-fatal):', e.message);
+    }
+
+    try {
+      await drainExcessPayoutWallet();
+    } catch (e) {
+      console.warn('Payout drain failed (non-fatal):', e.message);
     }
 
     const db = loadDb();
@@ -294,6 +330,13 @@ app.post('/api/confirm-deposit-payment', async (req, res) => {
     const paid = await checkInvoicePaid(paymentHash);
     if (!paid) throw new Error('Payment not confirmed by LNbits.');
 
+    const alreadyProcessedKey = `deposit_processed_${paymentHash}`;
+    if (dbGet(alreadyProcessedKey)) {
+      const currentBalance = getUserBalance(sessionId);
+      return res.json({ success: true, newBalance: currentBalance, paid_sats: 0, duplicate: true });
+    }
+    dbSet(alreadyProcessedKey, true);
+
     const newBalance = updateUserBalance(sessionId, clientSats);
     res.json({ success: true, newBalance, paid_sats: clientSats });
   } catch (e) {
@@ -331,7 +374,7 @@ app.get('/ping', (req, res) => res.send('pong'));
 app.use('/api', createWithdrawalRouter(dbAdapter, config));
 
 // --- Catch-all ---
-app.get('*', (req, res, next) => {
+app.get('*splat', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.includes('.')) return next();
   res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
 });
