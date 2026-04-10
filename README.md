@@ -1,6 +1,6 @@
-# 🔮 Madame Satoshi Backend
+# 🔮 Madame Satoshi's Bitcoin Oracle
 
-Unified backend for Madame Satoshi's Bitcoin Fortune Telling — serving the web interface, Telegram bot, and (future) Nostr interface from a single Node.js process with shared state and a shared Lightning jackpot pool.
+A provably fair Bitcoin fortune telling game powered by Lightning Network. Pay 21 sats, draw 3 tarot cards from the Major Arcana, receive your fortune — and verify every draw on the blockchain.
 
 **Live site:** [madamesatoshi.com](https://madamesatoshi.com)
 
@@ -8,9 +8,8 @@ Unified backend for Madame Satoshi's Bitcoin Fortune Telling — serving the web
 
 ## Architecture
 
-```
 madame-satoshi-backend/
-├── core/                        # Shared game logic
+├── core/
 │   ├── fortuneLogic.js          # Card drawing, win detection, payout calculation
 │   ├── db.js                    # JSON database (jackpot pool, user balances)
 │   ├── blockSeed.js             # Bitcoin block hash seeding for provably fair draws
@@ -21,45 +20,67 @@ madame-satoshi-backend/
 │   └── web/
 │       ├── server.js            # Express web server + WebSocket
 │       ├── withdrawalRoutes.js  # LNURL-based withdrawal flow
-│       └── frontend/            # Static site assets (HTML, CSS, JS, card images)
+│       └── frontend/            # Static site assets (HTML, CSS, JS, card images, sounds)
 ├── index.js                     # Entry point — starts both bot and web server
 ├── db.json                      # Runtime database (gitignored)
 └── .env                         # Secrets (gitignored)
-```
 
-A single Node process starts on boot, initializes the jackpot pool, fetches the latest block hash, and then starts both the Telegram bot and the web server. All interfaces share the same `db.json` and the same jackpot pool.
+
+A single Node process starts on boot, initializes the jackpot pool, fetches the latest Bitcoin block hash, and starts both the Telegram bot and the Express web server. All interfaces share the same `db.json` and jackpot pool.
 
 ---
 
 ## Game Logic
 
-All draws use provably fair, Bitcoin block-seeded randomness from a 22-card Major Arcana deck (9,240 possible permutations: P(22,3)).
+All draws use provably fair, Bitcoin block-seeded randomness from a 22-card Major Arcana deck — P(22,3) = 9,240 possible permutations.
 
-| Tier | Combination | Odds | Payout |
-|------|-------------|------|--------|
-| 🏆 Jackpot | Sun + World + Magician (any order) | 6 / 9,240 | 100% of pool |
-| ✨ Major Win | Any three matching Major Arcana | 66 / 9,240 | 35% of pool |
-| 💫 Minor Win | Any two matching Major Arcana | 54 / 9,240 | 15% of pool |
+| Tier | Combinations | Permutations | Odds | Payout |
+|------|-------------|--------------|------|--------|
+| 🏆 Jackpot | 1 (Sun + World + Magician) | 6 / 9,240 | 0.065% | 100% of pool |
+| ✨ Major Win | 11 triplets | 66 / 9,240 | 0.714% | 35% of pool |
+| 💫 Minor Win | 27 pairs | 162 / 9,240 | 1.75% | 15% of pool |
 
-**First play bonus:** New players receive 11 sats (The Fool's number) added to their balance on their first draw, regardless of outcome.
+**First play bonus:** New players receive 11 sats (The Fool's number) on their first draw regardless of outcome.
+
+### Major Win Combinations (11)
+Sun+World+Ace · Empress+Emperor+Strength · Star+Sun+Temperance · Magician+Lovers+World · Empress+Emperor+Lovers · Sun+Lovers+Ace · Wheel+Lovers+Magician · Star+Sun+Lovers · Justice+Wheel+Star · Hermit+Star+Lovers · Empress+World+Star
+
+### Minor Win Combinations (27)
+Ace+Wheel · Chariot+Strength · Sun+Lovers · World+Lovers · Magician+Star · Empress+Lovers · Justice+Wheel · Hermit+World · Empress+Magician · High Priestess+Hermit · Fool+Wheel · Death+Judgment · Star+Moon · Temperance+Justice · Magician+High Priestess · Emperor+Hierophant · Chariot+Emperor · Fool+Star · Death+Tower · Sun+Judgment · Moon+High Priestess · Hanged Man+Hermit · World+Ace · Hierophant+Justice · Fool+Magician · Temperance+Star · Strength+Hanged Man
 
 ---
 
 ## Provably Fair
 
-Each draw is seeded using the latest Bitcoin block hash fetched from a local Mempool instance. The `/api/verify/:sessionId` endpoint returns:
+Each draw is seeded using the latest Bitcoin block hash from a local Mempool instance. The seed is generated as:
 
-```json
-{
-  "blockHeight": 940418,
-  "blockHash": "00000000000000000000...",
-  "seed": "...",
-  "cards": ["XVIII", "XX", "I"],
-  "timestamp": 1741802318
-}
+SHA256(blockHash + sessionId + timestamp) → integer seed
+
+
+The `/api/verify/:sessionId` endpoint returns full verification data. Players can independently verify any draw in their terminal:
+```bash
+node -e "
+const crypto = require('crypto');
+const seed = crypto.createHash('sha256')
+  .update('BLOCK_HASH' + 'SESSION_ID' + 'TIMESTAMP')
+  .digest('hex');
+console.log('Seed:', parseInt(seed.substring(0,8), 16));
+"
 ```
 
-Players can verify any draw independently at [mempool.space](https://mempool.space).
+---
+
+## Frontend Features
+
+- **Mobile-first responsive layout** — fits any screen without scrolling
+- **Card flip animation** — cards appear face-down and flip to reveal
+- **Cabinet border shimmer** — glowing gold pulse during draws
+- **Sound effects** — card slide, flip, win, button sounds with mute toggle
+- **Live jackpot updates** — WebSocket broadcasts to all connected clients
+- **4 tabs:** Fortune · Wins (Combos) · Verify · Help
+- **Verify tab** — shows block height, hash, seed and Mempool link after each draw
+- **Shimmer buttons** — Play and Deposit buttons with animated gold shimmer
+- **First draw bonus** — 11 sats welcome gift with on-screen message
 
 ---
 
@@ -69,16 +90,17 @@ Players can verify any draw independently at [mempool.space](https://mempool.spa
 |--------|----------|-------------|
 | GET | `/ping` | Health check |
 | POST | `/api/session` | Create or retrieve session |
-| GET | `/api/balance` | Get session balance |
+| GET | `/api/balance/:sessionId` | Get session balance |
 | POST | `/api/draw` | Draw from balance (21 sats) |
-| POST | `/api/create-invoice` | Create Lightning deposit invoice |
+| POST | `/api/draw-from-balance` | Draw deducting from existing balance |
+| POST | `/api/create-invoice` | Create Lightning play invoice |
 | GET | `/api/check-invoice/:hash` | Check invoice payment status |
-| POST | `/api/create-deposit-invoice` | Create custom amount deposit invoice |
+| POST | `/api/create-deposit-invoice` | Create custom deposit invoice |
 | POST | `/api/confirm-deposit-payment` | Confirm deposit and credit balance |
 | GET | `/api/jackpot` | Get current jackpot pool |
 | GET | `/api/verify/:sessionId` | Get provably fair draw data |
-| POST | `/api/generate-withdraw-lnurl` | Generate LNURL withdrawal link |
-| GET | `/api/check-lnurl-claim/:id/:sessionId` | Check if LNURL was claimed |
+| POST | `/api/generate-withdraw-lnurl` | Generate LNURL withdrawal |
+| GET | `/api/check-lnurl-claim/:id/:sessionId` | Check LNURL claim status |
 
 WebSocket on the same port broadcasts live jackpot updates to all connected clients.
 
@@ -92,15 +114,14 @@ WebSocket on the same port broadcasts live jackpot updates to all connected clie
   - Payout wallet (staging for LNURL withdrawals)
   - Profit wallet (receives operator share)
   - Withdraw extension enabled
-- Local [Mempool](https://mempool.space/docs/api) instance (or use public API)
-- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) for public access (no port forwarding required)
+- Local [Mempool](https://mempool.space/docs/api) instance (or public API)
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) for public access
 
 ---
 
 ## Setup
 
 ### 1. Clone and install
-
 ```bash
 git clone https://github.com/artdesignbySF/madame-satoshi-backend.git
 cd madame-satoshi-backend
@@ -108,14 +129,12 @@ npm install
 ```
 
 ### 2. Configure environment
-
 ```bash
 cp .env.example .env
 nano .env
 ```
 
 ### 3. Run
-
 ```bash
 node index.js
 ```
@@ -123,32 +142,21 @@ node index.js
 ---
 
 ## Environment Variables
-
 ```env
-# Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token
 
-# LNbits (use public URL if serving over internet)
 LNBITS_URL=https://lnbits.yourdomain.com
 LNBITS_MAIN_INVOICE_KEY=...
 LNBITS_MAIN_ADMIN_KEY=...
 LNBITS_PAYOUT_ADMIN_KEY=...
 LNBITS_PROFIT_ADMIN_KEY=...
 
-# Game settings
 PAYMENT_AMOUNT_SATS=21
 FIRST_PLAY_BONUS_SATS=11
 
-# Card images (absolute path)
 CARDS_DIR=/path/to/cards
-
-# Mempool API
 MEMPOOL_API_URL=http://localhost:8081
-
-# Web server
 PORT=3002
-
-# Admin
 ADMIN_TELEGRAM_ID=your_telegram_id
 ```
 
@@ -157,9 +165,7 @@ ADMIN_TELEGRAM_ID=your_telegram_id
 ## Deployment (Pop!_OS + Cloudflare Tunnel)
 
 ### Systemd service
-
 ```ini
-# /etc/systemd/system/madamesatoshi.service
 [Unit]
 Description=Madame Satoshi Backend
 After=network.target
@@ -175,16 +181,13 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 ```
-
 ```bash
 sudo systemctl enable madamesatoshi
 sudo systemctl start madamesatoshi
 ```
 
 ### Cloudflare Tunnel config
-
 ```yaml
-# ~/.cloudflared/madamesatoshi-config.yml
 tunnel: YOUR_TUNNEL_ID
 credentials-file: /home/user/.cloudflared/YOUR_TUNNEL_ID.json
 
@@ -205,18 +208,17 @@ ingress:
 | Repo | Description |
 |------|-------------|
 | [MadameSatoshi](https://github.com/artdesignbySF/MadameSatoshi) | Frontend website |
-| [BTC-tarot-telegram-bot](https://github.com/artdesignbySF/BTC-tarot-telegram-bot) | Legacy standalone Telegram bot (superseded by this repo) |
+| [BTC-tarot-telegram-bot](https://github.com/artdesignbySF/BTC-tarot-telegram-bot) | Legacy standalone Telegram bot |
 
 ---
 
 ## Roadmap
 
-- [ ] Social links (X, GitHub, Telegram) in website footer
-- [ ] Verify prompt visible in website UI
 - [ ] Nostr interface
-- [ ] UI space efficiency improvements
-- [ ] script.js updated to display live block seed verify data
+- [ ] Persistent sessions (currently browser session only)
+- [ ] Jackpot history / leaderboard
+- [ ] Mobile app wrapper
 
 ---
 
-*Built with ⚡ and 🔮 — No banks. No servers. Just sats and fate.*
+*Built with ⚡ and 🔮 — No banks. No borders. Just sats and fate.*

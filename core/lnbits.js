@@ -8,6 +8,8 @@ const LNBITS_PROFIT_ADMIN_KEY = process.env.LNBITS_PROFIT_ADMIN_KEY;
 
 const PAYOUT_RESERVE_SATS = 100;
 
+let payoutWalletBusy = false;
+
 async function createInvoice(amountSats, memo) {
   const res = await axios.post(`${LNBITS_URL}/api/v1/payments`,
     { out: false, amount: amountSats, memo },
@@ -49,6 +51,8 @@ async function getPayoutWalletBalance() {
 }
 
 async function topUpPayoutWalletReserve() {
+  if (payoutWalletBusy) { console.log('Payout wallet operation already in progress, skipping.'); return; }
+  payoutWalletBusy = true;
   try {
     const balance = await getPayoutWalletBalance();
     if (balance === null) {
@@ -71,10 +75,14 @@ async function topUpPayoutWalletReserve() {
     }
   } catch (e) {
     console.warn(`Payout wallet reserve top-up failed (non-fatal): ${e.message}`);
+  } finally {
+    payoutWalletBusy = false;
   }
 }
 
 async function drainExcessPayoutWallet() {
+    if (payoutWalletBusy) { console.log('Payout wallet operation already in progress, skipping.'); return; }
+    payoutWalletBusy = true;
     try {
         const balance = await getPayoutWalletBalance();
         if (balance === null) return;
@@ -90,6 +98,8 @@ async function drainExcessPayoutWallet() {
         console.log(`Drained ${excess} sats from payout wallet to main.`);
     } catch (e) {
         console.warn(`Payout wallet drain failed (non-fatal): ${e.message}`);
+    } finally {
+        payoutWalletBusy = false;
     }
 }
 

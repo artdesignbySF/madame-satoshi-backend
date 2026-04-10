@@ -399,7 +399,7 @@ function drawCards(seed) {
 // Total possible outcomes: P(22,3) = 22 × 21 × 20 = 9,240 permutations
 // Jackpot: 6 permutations (all orderings of Sun+World+Magician)
 // Major wins: 66 permutations (11 combinations × 6 orderings each)
-// Minor wins: 666 permutations (111 combinations × 6 orderings each)
+// Minor wins: 27 pairs × 6 permutations = 162 / 9,240
 function calculateFortune(drawnCardObjects, poolAmount, minJackpotSeed, isFirstPlay = false) {
     let fortune = "";
     let sats_won = 0;
@@ -713,6 +713,240 @@ function calculateFortune(drawnCardObjects, poolAmount, minJackpotSeed, isFirstP
             `Minor Win! Generosity (${pastCard.number}) and resourcefulness (${presentCard.number}) create prosperity! +${sats_won} sats to your balance!`,
         ];
         fortune = choose(fortuneVariants_9);
+    } else if (
+        cardNames.includes("The High Priestess") &&
+        cardNames.includes("The Hermit")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_10 = [
+            `Minor Win! Hidden knowledge (II) meets deep research (IX). The answers you seek are closer than you think! +${sats_won} sats to your balance!`,
+            `Minor Win! Intuition (II) and solitude (IX) reveal what others cannot see! +${sats_won} sats to your balance!`,
+            `Minor Win! Secret wisdom (II) aligns with patient study (IX). Stack the knowledge! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_10);
+    } else if (
+        cardNames.includes("The Fool") &&
+        cardNames.includes("Wheel of Fortune")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_11 = [
+            `Minor Win! New beginnings (00) ride the turn of fate (X). Your boldness is rewarded! +${sats_won} sats to your balance!`,
+            `Minor Win! The leap of faith (00) meets fortune's spin (X). Chance favors the brave! +${sats_won} sats to your balance!`,
+            `Minor Win! Fearless beginnings (00) and lucky timing (X) align! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_11);
+    } else if (
+        cardNames.includes("Death") &&
+        cardNames.includes("Judgment")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_12 = [
+            `Minor Win! Transformation (XIII) awakens reckoning (XIX). One cycle ends, a new one rises! +${sats_won} sats to your balance!`,
+            `Minor Win! The great reset (XIII) leads to clarity (XIX). Rebirth is your reward! +${sats_won} sats to your balance!`,
+            `Minor Win! Change (XIII) and awakening (XIX) — the ultimate reset combo! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_12);
+    } else if (
+        cardNames.includes("The Star") &&
+        cardNames.includes("The Moon")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_13 = [
+            `Minor Win! Hope (XVI) navigates the unknown (XVII). Light guides you through darkness! +${sats_won} sats to your balance!`,
+            `Minor Win! Guiding star (XVI) and mysterious moon (XVII) — two faces of the night sky align! +${sats_won} sats to your balance!`,
+            `Minor Win! Inspiration (XVI) meets illusion (XVII). Trust your inner compass! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_13);
+    } else if (
+        cardNames.includes("Temperance") &&
+        cardNames.includes("Justice")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_14 = [
+            `Minor Win! Balance (XIV) meets fairness (XI). The scales tip in your favor! +${sats_won} sats to your balance!`,
+            `Minor Win! Patient equilibrium (XIV) and righteous order (XI) prevail! +${sats_won} sats to your balance!`,
+            `Minor Win! Harmony (XIV) and justice (XI) — the universe corrects course! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_14);
+    } else if (
+        cardNames.includes("The Magician") &&
+        cardNames.includes("The High Priestess")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_15 = [
+            `Minor Win! Active will (I) meets passive knowing (II). The great duality unlocks fortune! +${sats_won} sats to your balance!`,
+            `Minor Win! Skill (I) and intuition (II) — the perfect partnership manifests! +${sats_won} sats to your balance!`,
+            `Minor Win! Mastery (I) aligns with mystery (II). Your power is complete! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_15);
+    } else if (
+        cardNames.includes("The Emperor") &&
+        cardNames.includes("The Hierophant")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_16 = [
+            `Minor Win! Secular power (IV) meets institutional wisdom (V). The establishment rewards you! +${sats_won} sats to your balance!`,
+            `Minor Win! Governance (IV) and protocol (V) align — code is law, and law is on your side! +${sats_won} sats to your balance!`,
+            `Minor Win! Authority (IV) and structure (V) create stability and prosperity! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_16);
+    } else if (
+        cardNames.includes("The Chariot") &&
+        cardNames.includes("The Emperor")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_17 = [
+            `Minor Win! Determined drive (VII) backed by solid foundations (IV). Execution meets governance! +${sats_won} sats to your balance!`,
+            `Minor Win! Victory in motion (VII) meets stable authority (IV). Unstoppable force! +${sats_won} sats to your balance!`,
+            `Minor Win! Momentum (VII) and mastery (IV) — nothing can stop you now! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_17);
+    } else if (
+        cardNames.includes("The Fool") &&
+        cardNames.includes("The Star")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_18 = [
+            `Minor Win! The leap of faith (00) is guided by starlight (XVI). Optimism rewarded! +${sats_won} sats to your balance!`,
+            `Minor Win! New beginnings (00) find their guiding light (XVI). Your path is illuminated! +${sats_won} sats to your balance!`,
+            `Minor Win! Innocent boldness (00) meets cosmic inspiration (XVI)! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_18);
+    } else if (
+        cardNames.includes("Death") &&
+        cardNames.includes("The Tower")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_19 = [
+            `Minor Win! Double disruption — transformation (XIII) and the great reset (XV). The old must fall! +${sats_won} sats to your balance!`,
+            `Minor Win! Radical change (XIII) follows sudden collapse (XV). From ruins, you rise! +${sats_won} sats to your balance!`,
+            `Minor Win! The reset pair (XIII + XV) — destruction precedes your rebirth! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_19);
+    } else if (
+        cardNames.includes("The Sun") &&
+        cardNames.includes("Judgment")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_20 = [
+            `Minor Win! Peak clarity (XVIII) meets final reckoning (XIX). The bull market awakening! +${sats_won} sats to your balance!`,
+            `Minor Win! Radiant truth (XVIII) and cosmic call (XIX) — you are seen and celebrated! +${sats_won} sats to your balance!`,
+            `Minor Win! Joy (XVIII) and awakening (XIX) — the universe applauds your journey! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_20);
+    } else if (
+        cardNames.includes("The Moon") &&
+        cardNames.includes("The High Priestess")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_21 = [
+            `Minor Win! Hidden variables (XVII) meet secret knowledge (II). The two mystery cards reveal their truth! +${sats_won} sats to your balance!`,
+            `Minor Win! Illusion (XVII) and intuition (II) — only the wise can read these signs! +${sats_won} sats to your balance!`,
+            `Minor Win! The veil lifts — Moon (XVII) and Priestess (II) share their secrets with you! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_21);
+    } else if (
+        cardNames.includes("The Hanged Man") &&
+        cardNames.includes("The Hermit")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_22 = [
+            `Minor Win! Low time preference (XII) meets deep research (IX). The ultimate HODL and study combo! +${sats_won} sats to your balance!`,
+            `Minor Win! Patient waiting (XII) and solitary wisdom (IX) — you played the long game! +${sats_won} sats to your balance!`,
+            `Minor Win! Surrender (XII) and introspection (IX) reveal hidden treasure! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_22);
+    } else if (
+        cardNames.includes("The World") &&
+        cardNames.includes("Ace of Pentacles")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_23 = [
+            `Minor Win! Completion (XX) opens new financial opportunity (XXI). The cycle ends, the seed is planted! +${sats_won} sats to your balance!`,
+            `Minor Win! Total fulfillment (XX) meets new abundance (XXI). What a time to be alive! +${sats_won} sats to your balance!`,
+            `Minor Win! The world is yours (XX) and wealth follows (XXI)! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_23);
+    } else if (
+        cardNames.includes("The Hierophant") &&
+        cardNames.includes("Justice")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_24 = [
+            `Minor Win! Established consensus (V) meets code is law (XI). Institutional fairness prevails! +${sats_won} sats to your balance!`,
+            `Minor Win! Tradition (V) and truth (XI) — the system works in your favor! +${sats_won} sats to your balance!`,
+            `Minor Win! Wisdom of ages (V) aligns with cosmic balance (XI)! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_24);
+    } else if (
+        cardNames.includes("The Fool") &&
+        cardNames.includes("The Magician")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_25 = [
+            `Minor Win! Potential energy (00) meets raw skill (I). The beginning of mastery! +${sats_won} sats to your balance!`,
+            `Minor Win! Innocent curiosity (00) unleashed by focused will (I). Magic happens! +${sats_won} sats to your balance!`,
+            `Minor Win! The journey begins (00) with all the tools you need (I)! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_25);
+    } else if (
+        cardNames.includes("Temperance") &&
+        cardNames.includes("The Star")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_26 = [
+            `Minor Win! Patient integration (XIV) meets renewed hope (XVI). Two of the great healing cards align! +${sats_won} sats to your balance!`,
+            `Minor Win! Balance (XIV) and inspiration (XVI) — you are on the path to wholeness! +${sats_won} sats to your balance!`,
+            `Minor Win! Gentle flow (XIV) guided by starlight (XVI). Healing and hope! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_26);
+    } else if (
+        cardNames.includes("Strength") &&
+        cardNames.includes("The Hanged Man")
+    ) {
+        let p = Math.max(TIER_B_MIN_SATS, Math.floor(effectiveJackpotPool * TIER_B_PERCENT));
+        sats_won = Math.min(p, poolAmount);
+        win_tier = "minor";
+        const fortuneVariants_27 = [
+            `Minor Win! Inner fortitude (VIII) meets low time preference (XII). The ultimate HODL through the wait! +${sats_won} sats to your balance!`,
+            `Minor Win! Quiet power (VIII) and patient surrender (XII) — you held strong! +${sats_won} sats to your balance!`,
+            `Minor Win! Resilience (VIII) and acceptance (XII) create unexpected reward! +${sats_won} sats to your balance!`,
+        ];
+        fortune = choose(fortuneVariants_27);
     }
 
     // --- Non-Winning Fortunes: Position-Based Templates with Advice ---

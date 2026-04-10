@@ -28,6 +28,7 @@ const dbAdapter = {
 
 const config = {
   lnbitsUrl: process.env.LNBITS_URL,
+  lnbitsInternalUrl: process.env.LNBITS_INTERNAL_URL || process.env.LNBITS_URL,
   lnbitsMainInvoiceKey: process.env.LNBITS_MAIN_INVOICE_KEY,
   lnbitsMainAdminKey: process.env.LNBITS_MAIN_ADMIN_KEY,
   lnbitsPayoutAdminKey: process.env.LNBITS_PAYOUT_ADMIN_KEY,
@@ -107,7 +108,13 @@ app.post('/api/draw', async (req, res) => {
       };
       saveDb(db);
 
-      const { fortune } = calculateFortune(cards, getJackpot(), MIN_JACKPOT_SEED, true);
+      const { fortune: rawFortune, win_tier } = calculateFortune(cards, getJackpot(), MIN_JACKPOT_SEED, true);
+      // On first play, if cards would have been a win, still only pay the bonus
+      // but show a welcome fortune instead of misleading win text
+      let fortune = rawFortune;
+      if (win_tier !== 'none') {
+          fortune = `The oracle reveals: ${cards[0].name} (${cards[0].number}) shaped your past, ${cards[1].name} (${cards[1].number}) defines your present, and ${cards[2].name} (${cards[2].number}) calls to your future. Madame Satoshi welcomes you — may your sats multiply.`;
+      }
 
       return res.json({
         cards,
@@ -320,11 +327,8 @@ app.get('/api/check-deposit-invoice/:payment_hash', async (req, res) => {
 
 // --- Confirm Deposit Payment ---
 app.post('/api/confirm-deposit-payment', async (req, res) => {
-  const { sessionId, paymentHash, amount } = req.body;
-  if (!sessionId || !paymentHash || !amount) return res.status(400).json({ error: 'Missing required fields.' });
-
-  const clientSats = parseInt(amount);
-  if (isNaN(clientSats) || clientSats <= 0) return res.status(400).json({ error: 'Invalid amount.' });
+  const { sessionId, paymentHash } = req.body;
+  if (!sessionId || !paymentHash) return res.status(400).json({ error: 'Missing required fields.' });
 
   try {
     const paid = await checkInvoicePaid(paymentHash);
@@ -335,10 +339,21 @@ app.post('/api/confirm-deposit-payment', async (req, res) => {
       const currentBalance = getUserBalance(sessionId);
       return res.json({ success: true, newBalance: currentBalance, paid_sats: 0, duplicate: true });
     }
+
+    const paymentDetails = await axios.get(
+      `${process.env.LNBITS_INTERNAL_URL || process.env.LNBITS_URL}/api/v1/payments/${paymentHash}`,
+      { headers: { 'X-Api-Key': process.env.LNBITS_MAIN_INVOICE_KEY }, timeout: 10000 }
+    );
+    const actualSats = Math.floor(paymentDetails.data.amount / 1000);
+
+    if (actualSats <= 0 || actualSats > 10000000) {
+      return res.status(400).json({ error: `Invalid payment amount from LNbits: ${actualSats} sats.` });
+    }
+
     dbSet(alreadyProcessedKey, true);
 
-    const newBalance = updateUserBalance(sessionId, clientSats);
-    res.json({ success: true, newBalance, paid_sats: clientSats });
+    const newBalance = updateUserBalance(sessionId, actualSats);
+    res.json({ success: true, newBalance, paid_sats: actualSats });
   } catch (e) {
     console.error('Error confirming deposit:', e.message);
     res.status(500).json({ error: e.message || 'Failed to confirm deposit.' });
@@ -380,7 +395,7 @@ app.get('*splat', (req, res, next) => {
 });
 
 // --- Start Server ---
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Madame Satoshi Web Server listening on port ${PORT}`);
   if (getJackpot() <= 0) {

@@ -30,7 +30,7 @@
 
             <div class="tab-bar">
                 <button class="tab-button active" data-tab="fortune">🔮 Fortune</button>
-                <button class="tab-button" data-tab="wins">🏆 Wins</button>
+                <button class="tab-button" data-tab="wins">🏆 Combos</button>
                 <button class="tab-button" data-tab="verify">🔍 Verify</button>
                 <button class="tab-button" data-tab="help"><span style="font-size:1.15em;">ⓘ</span> Help</button>
             </div>
@@ -41,29 +41,63 @@
                 </div>
                 <div id="tab-wins" class="tab-content">
                     <div id="key-wins-display" class="key-wins">
-                        <h3>Win Combinations</h3>
-                        <table class="wins-table">
-                            <thead>
-                                <tr><th>Tier</th><th>Combination</th><th>Payout</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Jackpot</td>
-                                    <td>Sun + World + Magician</td>
-                                    <td>Entire Pool</td>
-                                </tr>
-                                <tr>
-                                    <td>Major</td>
-                                    <td>Sun + World + Ace of Pentacles<br/>Emperor + Empress + Strength<br/>Star + Sun + Temperance<br/>Magician + Lovers + World<br/>Empress + Emperor + Lovers<br/>Sun + Lovers + Ace of Pentacles<br/>Wheel of Fortune + Lovers + Magician<br/>Star + Sun + Lovers<br/>Justice + Wheel of Fortune + Star<br/>Hermit + Star + Lovers<br/>Empress + World + Star</td>
-                                    <td>~35% Pool</td>
-                                </tr>
-                                <tr>
-                                    <td>Minor</td>
-                                    <td>Ace of Pentacles + Wheel of Fortune<br/>Chariot + Strength<br/>Sun + Lovers<br/>World + Lovers<br/>Magician + Star<br/>Empress + Lovers<br/>Justice + Wheel of Fortune<br/>Hermit + World<br/>Empress + Magician</td>
-                                    <td>~15% Pool</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="wins-tier-static">
+                            🌟 <strong>Jackpot — Entire Pool:</strong> Sun + World + Magician (any order)
+                        </div>
+                        <details class="wins-tier">
+                            <summary>✨ Major Win — ~35% Pool</summary>
+                            <table class="wins-table">
+                                <thead><tr><th>Combination</th><th>Payout</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Sun + World + Ace of Pentacles</td><td rowspan="11">~35% Pool</td></tr>
+                                    <tr><td>Emperor + Empress + Strength</td></tr>
+                                    <tr><td>Star + Sun + Temperance</td></tr>
+                                    <tr><td>Magician + Lovers + World</td></tr>
+                                    <tr><td>Empress + Emperor + Lovers</td></tr>
+                                    <tr><td>Sun + Lovers + Ace of Pentacles</td></tr>
+                                    <tr><td>Wheel of Fortune + Lovers + Magician</td></tr>
+                                    <tr><td>Star + Sun + Lovers</td></tr>
+                                    <tr><td>Justice + Wheel of Fortune + Star</td></tr>
+                                    <tr><td>Hermit + Star + Lovers</td></tr>
+                                    <tr><td>Empress + World + Star</td></tr>
+                                </tbody>
+                            </table>
+                        </details>
+                        <details class="wins-tier">
+                            <summary>⚡ Minor Win — ~15% Pool</summary>
+                            <table class="wins-table">
+                                <thead><tr><th>Combination</th><th>Payout</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Ace of Pentacles + Wheel of Fortune</td><td rowspan="27">~15% Pool</td></tr>
+                                    <tr><td>Chariot + Strength</td></tr>
+                                    <tr><td>Sun + Lovers</td></tr>
+                                    <tr><td>World + Lovers</td></tr>
+                                    <tr><td>Magician + Star</td></tr>
+                                    <tr><td>Empress + Lovers</td></tr>
+                                    <tr><td>Justice + Wheel of Fortune</td></tr>
+                                    <tr><td>Hermit + World</td></tr>
+                                    <tr><td>Empress + Magician</td></tr>
+                                    <tr><td>High Priestess + Hermit</td></tr>
+                                    <tr><td>Fool + Wheel of Fortune</td></tr>
+                                    <tr><td>Death + Judgment</td></tr>
+                                    <tr><td>Star + Moon</td></tr>
+                                    <tr><td>Temperance + Justice</td></tr>
+                                    <tr><td>Magician + High Priestess</td></tr>
+                                    <tr><td>Emperor + Hierophant</td></tr>
+                                    <tr><td>Chariot + Emperor</td></tr>
+                                    <tr><td>Fool + Star</td></tr>
+                                    <tr><td>Death + Tower</td></tr>
+                                    <tr><td>Sun + Judgment</td></tr>
+                                    <tr><td>Moon + High Priestess</td></tr>
+                                    <tr><td>Hanged Man + Hermit</td></tr>
+                                    <tr><td>World + Ace of Pentacles</td></tr>
+                                    <tr><td>Hierophant + Justice</td></tr>
+                                    <tr><td>Fool + Magician</td></tr>
+                                    <tr><td>Temperance + Star</td></tr>
+                                    <tr><td>Strength + Hanged Man</td></tr>
+                                </tbody>
+                            </table>
+                        </details>
                     </div>
                 </div>
                 <div id="tab-verify" class="tab-content">
@@ -96,8 +130,8 @@
                             <li>
                                 <strong>WIN TIERS</strong> (Pool Permitting):<br />
                                 - <strong>JACKPOT!</strong> (Sun+World+Magician): Wins ENTIRE pool!<br />
-                                - Major Win: ~35% pool.<br />
-                                - Minor Win: ~15% pool.
+                                - Major Win: ~35% pool (11 combinations).<br />
+                                - Minor Win: ~15% pool (27 combinations).
                             </li>
                             <li>
                                 <strong style="color:#ffcc66">WARNING:</strong>

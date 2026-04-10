@@ -6,7 +6,7 @@ const axios = require("axios");
 async function attemptLnbitsWithdrawLink(config, payload) {
     try {
         const response = await axios.post(
-            `${config.lnbitsUrl}/withdraw/api/v1/links`,
+            `${process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl}/withdraw/api/v1/links`,
             payload,
             {
                 headers: {
@@ -41,7 +41,7 @@ async function attemptLnbitsDeleteWithdrawLink(config, linkId) {
             ` -> Attempting to delete previous LNURL Withdraw Link ID from LNbits: ${linkId}`,
         );
         await axios.delete(
-            `${config.lnbitsUrl}/withdraw/api/v1/links/${linkId}`,
+            `${process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl}/withdraw/api/v1/links/${linkId}`,
             {
                 headers: {
                     "X-Api-Key": config.lnbitsPayoutAdminKey,
@@ -76,7 +76,7 @@ async function attemptInternalTransfer(config, amount, memo) {
             webhook: "",
         };
         const invResponse = await axios.post(
-            `${config.lnbitsUrl}/api/v1/payments`,
+            `${process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl}/api/v1/payments`,
             invoicePayload,
             {
                 headers: {
@@ -109,7 +109,7 @@ async function attemptInternalTransfer(config, amount, memo) {
             bolt11: internalInvoiceOnPayoutWallet,
         };
         const paymentResponse = await axios.post(
-            `${config.lnbitsUrl}/api/v1/payments`,
+            `${process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl}/api/v1/payments`,
             paymentPayload,
             {
                 headers: {
@@ -154,6 +154,7 @@ async function attemptInternalTransfer(config, amount, memo) {
 // Factory function for the router
 const createWithdrawalRouter = (db, config) => {
     const router = express.Router();
+    const internalLnbitsUrl = process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl;
 
     const getActiveLinkKey = (sessionId) => `active_lnurl_${sessionId}`;
     const getFundedLinkDetailsKey = (linkId) =>
@@ -263,7 +264,7 @@ const createWithdrawalRouter = (db, config) => {
                                 memo: `Refund unclaimed LNURL ${existingLinkId}`,
                             };
                             const mainWalletInvRes = await axios.post(
-                                `${config.lnbitsUrl}/api/v1/payments`,
+                                `${internalLnbitsUrl}/api/v1/payments`,
                                 refundInvoicePayload,
                                 {
                                     headers: {
@@ -278,7 +279,7 @@ const createWithdrawalRouter = (db, config) => {
 
                             if (refundPaymentRequest) {
                                 await axios.post(
-                                    `${config.lnbitsUrl}/api/v1/payments`,
+                                    `${internalLnbitsUrl}/api/v1/payments`,
                                     { out: true, bolt11: refundPaymentRequest },
                                     {
                                         headers: {
@@ -454,7 +455,7 @@ const createWithdrawalRouter = (db, config) => {
                 .json({ error: "Check service misconfigured." });
         }
 
-        const checkUrl = `${config.lnbitsUrl}/withdraw/api/v1/links/${link_id}`;
+        const checkUrl = `${internalLnbitsUrl}/withdraw/api/v1/links/${link_id}`;
         try {
             const response = await axios.get(checkUrl, {
                 headers: {
