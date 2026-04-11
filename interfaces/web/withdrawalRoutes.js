@@ -156,6 +156,21 @@ const createWithdrawalRouter = (db, config) => {
     const router = express.Router();
     const internalLnbitsUrl = process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl;
 
+    // Fix 4: In-memory rate limiter — max 5 /generate-withdraw-lnurl calls per session per minute
+    const withdrawalRateLimit = new Map();
+    const RATE_LIMIT_MAX = 5;
+    const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+    function checkRateLimit(sessionId) {
+        const now = Date.now();
+        const timestamps = (withdrawalRateLimit.get(sessionId) || [])
+            .filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+        if (timestamps.length >= RATE_LIMIT_MAX) return false;
+        timestamps.push(now);
+        withdrawalRateLimit.set(sessionId, timestamps);
+        return true;
+    }
+
     const getActiveLinkKey = (sessionId) => `active_lnurl_${sessionId}`;
     const getFundedLinkDetailsKey = (linkId) =>
         `funded_details_lnurl_${linkId}`;
@@ -183,6 +198,12 @@ const createWithdrawalRouter = (db, config) => {
     router.post("/generate-withdraw-lnurl", async (req, res) => {
         const { sessionId, amount: clientRequestedAmountStr } = req.body;
         let newGeneratedLinkId = null;
+        // Fix 1: Track whether we pre-decremented the balance so we can restore it on failure
+        let balanceDecremented = false;
+        let amountDecremented = 0;
+        // Fix 1: Track whether the payout funding actually completed so we know
+        // not to delete a live funded LNURL if a subsequent DB operation fails
+        let fundingComplete = false;
         const activeLinkKey = getActiveLinkKey(sessionId);
 
         if (!sessionId)
@@ -200,6 +221,11 @@ const createWithdrawalRouter = (db, config) => {
                 .json({ error: "Withdrawal service misconfigured." });
         }
 
+        // Fix 4: Enforce rate limit before doing any work
+        if (!checkRateLimit(sessionId)) {
+            return res.status(429).json({ error: "Too many withdrawal requests. Please wait a minute." });
+        }
+
         console.log(
             `Request: /generate-withdraw-lnurl for session ${sessionId.substring(0, 6)}, Amount from client: ${clientRequestedAmountStr}`,
         );
@@ -208,7 +234,7 @@ const createWithdrawalRouter = (db, config) => {
             const existingLinkId = await db.get(activeLinkKey);
             if (existingLinkId) {
                 console.log(
-                    ` -> Found existing active link ID: ${existingLinkId}. Checking status & attempting refund if applicable...`,
+                    ` -> Found existing active link ID: ${existingLinkId}. Checking status directly with LNbits...`,
                 );
                 let wasClaimed = false;
                 const existingLinkFundedDetailsKey =
@@ -217,31 +243,61 @@ const createWithdrawalRouter = (db, config) => {
                     existingLinkFundedDetailsKey,
                 );
 
+                // Fix 3: Direct LNbits API call instead of self-referencing HTTP request.
+                // The old approach (axios.get to our own /api/check-lnurl-claim endpoint) was
+                // unreliable — timeouts or in-flight errors would silently default to "not claimed"
+                // and allow a refund of funds the user had already received.
                 try {
-                    const host = req.get("host");
-                    const protocol = req.protocol;
-                    const internalCheckUrl = `${protocol}://${host}/api/check-lnurl-claim/${existingLinkId}/${sessionId}`;
-                    const internalResponse = await axios.get(internalCheckUrl, {
-                        timeout: 7000,
+                    const checkUrl = `${internalLnbitsUrl}/withdraw/api/v1/links/${existingLinkId}`;
+                    const linkResponse = await axios.get(checkUrl, {
+                        headers: { "X-Api-Key": config.lnbitsPayoutAdminKey },
+                        timeout: 10000,
                     });
-                    if (internalResponse.data?.claimed === true) {
+                    if (linkResponse.data?.used >= 1) {
                         wasClaimed = true;
                         console.log(
-                            ` -> Previous link ${existingLinkId} was ALREADY CLAIMED.`,
+                            ` -> Previous link ${existingLinkId} was ALREADY CLAIMED (direct LNbits check).`,
                         );
                     } else {
                         console.log(
-                            ` -> Previous link ${existingLinkId} was NOT claimed based on internal check.`,
+                            ` -> Previous link ${existingLinkId} was NOT claimed (direct LNbits check).`,
                         );
                     }
                 } catch (checkError) {
-                    console.warn(
-                        ` -> Could not determine claim status of ${existingLinkId} via internal check (Error: ${checkError.message}). Assuming not claimed for cleanup.`,
-                    );
+                    if (checkError.response?.status === 404) {
+                        // Link is gone from LNbits — funds were already disbursed to the user.
+                        // Treat as claimed so we deduct the balance rather than attempting a refund.
+                        wasClaimed = true;
+                        console.log(
+                            ` -> Previous link ${existingLinkId} not found in LNbits (404) — treating as claimed.`,
+                        );
+                    } else {
+                        console.warn(
+                            ` -> Could not check status of ${existingLinkId}: ${checkError.message}. Assuming not claimed for cleanup.`,
+                        );
+                    }
                 }
 
-                if (
-                    !wasClaimed &&
+                if (wasClaimed) {
+                    // Fix 2: If the user claimed the LNURL without the frontend ever polling
+                    // /check-lnurl-claim (e.g. they closed the tab immediately after scanning),
+                    // their in-game balance was never decremented. Catch up now.
+                    const processedClaimKey = `processed_claim_${existingLinkId}`;
+                    if (!(await db.get(processedClaimKey))) {
+                        const amountToDeduct = existingLinkFundedDetails?.amountUserCouldWithdraw;
+                        if (typeof amountToDeduct === "number" && amountToDeduct > 0) {
+                            await updateUserBalance(sessionId, -amountToDeduct);
+                            await db.set(processedClaimKey, true);
+                            console.log(
+                                ` -> Deducted ${amountToDeduct} sats for silently claimed link ${existingLinkId}.`,
+                            );
+                        }
+                    } else {
+                        console.log(
+                            ` -> Previous link ${existingLinkId} already claimed and balance already deducted.`,
+                        );
+                    }
+                } else if (
                     existingLinkFundedDetails &&
                     existingLinkFundedDetails.amountOriginallyFundedToPayout > 0
                 ) {
@@ -315,7 +371,7 @@ const createWithdrawalRouter = (db, config) => {
                     }
                 }
                 await db.delete(activeLinkKey);
-                await db.delete(existingLinkFundedDetailsKey); // Clean up its details
+                await db.delete(existingLinkFundedDetailsKey);
                 console.log(
                     ` -> Cleared DB entries for previous link ${existingLinkId}.`,
                 );
@@ -357,6 +413,17 @@ const createWithdrawalRouter = (db, config) => {
                 ` -> Determined amountToWithdraw for new LNURL: ${amountToWithdraw} sats`,
             );
 
+            // Fix 1: Decrement balance BEFORE creating the LNURL or moving any funds.
+            // This closes the race condition where two concurrent requests both read
+            // the same positive balance and each fund a separate payout LNURL.
+            // If anything below fails, the catch block restores the balance.
+            await updateUserBalance(sessionId, -amountToWithdraw);
+            balanceDecremented = true;
+            amountDecremented = amountToWithdraw;
+            console.log(
+                ` -> Pre-decremented balance by ${amountToWithdraw} sats before funding.`,
+            );
+
             const withdrawPayload = {
                 title:
                     config.LNURL_WITHDRAW_TITLE ||
@@ -385,14 +452,20 @@ const createWithdrawalRouter = (db, config) => {
                 amountToPreFundToPayout,
                 transferMemo,
             );
+            // Fix 1: Payout wallet has been funded successfully. The balance deduction
+            // is now permanent and correct. If anything fails after this point we must
+            // NOT restore the balance (funds are already in payout wallet) and must NOT
+            // delete the LNURL (user needs it to claim their sats).
+            fundingComplete = true;
+            balanceDecremented = false;
             console.log(
                 ` -> Funding of ${amountToPreFundToPayout} sats successful for Link ID ${newGeneratedLinkId}.`,
             );
 
             await db.set(getActiveLinkKey(sessionId), newGeneratedLinkId);
             await db.set(getFundedLinkDetailsKey(newGeneratedLinkId), {
-                amountUserCouldWithdraw: amountToWithdraw, // What the user's LNURL is for
-                amountOriginallyFundedToPayout: amountToPreFundToPayout, // What we actually moved to payout wallet
+                amountUserCouldWithdraw: amountToWithdraw,
+                amountOriginallyFundedToPayout: amountToPreFundToPayout,
                 sessionId: sessionId,
                 fundedAt: Date.now(),
             });
@@ -410,7 +483,20 @@ const createWithdrawalRouter = (db, config) => {
                 `--- ERROR during /generate-withdraw-lnurl for session ${sessionId.substring(0, 6)} ---`,
             );
             console.error("Error details:", error.message);
-            if (newGeneratedLinkId) {
+
+            // Fix 1: Restore balance only if we decremented it AND the payout funding
+            // did not complete. If funding completed, the user's sats are in the payout
+            // wallet and the balance deduction was correct.
+            if (balanceDecremented) {
+                console.log(
+                    ` -> Restoring ${amountDecremented} sats to balance after failed withdrawal setup.`,
+                );
+                await updateUserBalance(sessionId, amountDecremented);
+            }
+
+            // Only delete the LNURL if the payout transfer never completed.
+            // A funded LNURL must not be deleted — the user would lose their sats.
+            if (newGeneratedLinkId && !fundingComplete) {
                 console.log(
                     "Attempting to delete partially created LNURL from LNbits:",
                     newGeneratedLinkId,
@@ -429,7 +515,7 @@ const createWithdrawalRouter = (db, config) => {
                     userMsg =
                         "Withdrawal Temporarily Unavailable (Operator Funding).";
                 else if (error.message?.includes("Insufficient balance"))
-                    userMsg = error.message; // Should be caught earlier
+                    userMsg = error.message;
                 res.status(500).json({
                     error: userMsg,
                     details: error.message,
