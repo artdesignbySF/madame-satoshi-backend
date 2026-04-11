@@ -329,6 +329,7 @@ app.get('/api/check-deposit-invoice/:payment_hash', async (req, res) => {
 app.post('/api/confirm-deposit-payment', async (req, res) => {
   const { sessionId, paymentHash } = req.body;
   if (!sessionId || !paymentHash) return res.status(400).json({ error: 'Missing required fields.' });
+  console.log('Deposit confirm called, hash:', paymentHash?.substring(0,10));
 
   try {
     const paid = await checkInvoicePaid(paymentHash);
@@ -344,7 +345,9 @@ app.post('/api/confirm-deposit-payment', async (req, res) => {
       `${process.env.LNBITS_INTERNAL_URL || process.env.LNBITS_URL}/api/v1/payments/${paymentHash}`,
       { headers: { 'X-Api-Key': process.env.LNBITS_MAIN_INVOICE_KEY }, timeout: 10000 }
     );
-    const actualSats = Math.floor(paymentDetails.data.amount / 1000);
+    console.log('LNbits payment data:', JSON.stringify(paymentDetails.data));
+    const rawAmount = paymentDetails.data.details?.amount ?? paymentDetails.data.amount;
+    const actualSats = Math.floor(Math.abs(rawAmount) / 1000);
 
     if (actualSats <= 0 || actualSats > 10000000) {
       return res.status(400).json({ error: `Invalid payment amount from LNbits: ${actualSats} sats.` });
