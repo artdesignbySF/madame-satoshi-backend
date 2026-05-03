@@ -6,7 +6,7 @@ const axios = require("axios");
 async function attemptLnbitsWithdrawLink(config, payload) {
     try {
         const response = await axios.post(
-            `${process.env.LNBITS_INTERNAL_URL || config.lnbitsUrl}/withdraw/api/v1/links`,
+            `${config.lnbitsUrl}/withdraw/api/v1/links`,
             payload,
             {
                 headers: {
@@ -170,6 +170,16 @@ const createWithdrawalRouter = (db, config) => {
         withdrawalRateLimit.set(sessionId, timestamps);
         return true;
     }
+
+    // Prune stale rate limit entries every 5 minutes to prevent unbounded Map growth
+    setInterval(() => {
+        const now = Date.now();
+        for (const [id, timestamps] of withdrawalRateLimit.entries()) {
+            if (timestamps.every(t => now - t >= RATE_LIMIT_WINDOW_MS)) {
+                withdrawalRateLimit.delete(id);
+            }
+        }
+    }, 5 * 60 * 1000);
 
     const getActiveLinkKey = (sessionId) => `active_lnurl_${sessionId}`;
     const getFundedLinkDetailsKey = (linkId) =>
@@ -348,6 +358,11 @@ const createWithdrawalRouter = (db, config) => {
                                 );
                                 console.log(
                                     ` -> REFUND SUCCESS: ${amountToAttemptRefund} sats for ${existingLinkId} moved Payout -> Main.`,
+                                );
+                                // Issue 3 fix: sats are back in main wallet — restore user balance
+                                await updateUserBalance(sessionId, amountToAttemptRefund);
+                                console.log(
+                                    ` -> Restored ${amountToAttemptRefund} sats to balance for session ${sessionId.substring(0, 6)}.`,
                                 );
                             } else {
                                 console.error(

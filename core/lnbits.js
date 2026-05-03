@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const LNBITS_URL = process.env.LNBITS_URL;
+const LNBITS_URL = process.env.LNBITS_INTERNAL_URL || process.env.LNBITS_URL;
 const LNBITS_MAIN_INVOICE_KEY = process.env.LNBITS_MAIN_INVOICE_KEY;
 const LNBITS_MAIN_ADMIN_KEY = process.env.LNBITS_MAIN_ADMIN_KEY;
 const LNBITS_PAYOUT_ADMIN_KEY = process.env.LNBITS_PAYOUT_ADMIN_KEY;
@@ -13,7 +13,7 @@ let payoutWalletBusy = false;
 async function createInvoice(amountSats, memo) {
   const res = await axios.post(`${LNBITS_URL}/api/v1/payments`,
     { out: false, amount: amountSats, memo },
-    { headers: { 'X-Api-Key': LNBITS_MAIN_INVOICE_KEY }, timeout: 15000 });
+    { headers: { 'X-Api-Key': LNBITS_MAIN_ADMIN_KEY }, timeout: 15000 });
   if (!res.data?.payment_hash || !res.data?.payment_request)
     throw new Error('Bad LNbits invoice response');
   return { hash: res.data.payment_hash, bolt11: res.data.payment_request };
