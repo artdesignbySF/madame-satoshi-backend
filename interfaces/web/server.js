@@ -18,6 +18,29 @@ const MIN_JACKPOT_SEED = 500;
 const PAYMENT_AMOUNT_SATS = parseInt(process.env.PAYMENT_AMOUNT_SATS || '21');
 const FIRST_PLAY_BONUS_SATS = parseInt(process.env.FIRST_PLAY_BONUS_SATS || '11');
 const JACKPOT_CONTRIBUTION = Math.floor(PAYMENT_AMOUNT_SATS * 0.8);
+const MAX_DEPOSIT_SATS = 1000000;
+
+// In-memory draw rate limiter — max 10 draws per session per minute
+const drawRateLimit = new Map();
+const DRAW_RATE_LIMIT_MAX = 10;
+const DRAW_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+function checkDrawRateLimit(sessionId) {
+  const now = Date.now();
+  const timestamps = (drawRateLimit.get(sessionId) || []).filter(t => now - t < DRAW_RATE_LIMIT_WINDOW_MS);
+  if (timestamps.length >= DRAW_RATE_LIMIT_MAX) return false;
+  timestamps.push(now);
+  drawRateLimit.set(sessionId, timestamps);
+  return true;
+}
+
+// Prune stale draw rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, timestamps] of drawRateLimit.entries()) {
+    if (timestamps.every(t => now - t >= DRAW_RATE_LIMIT_WINDOW_MS)) drawRateLimit.delete(id);
+  }
+}, 5 * 60 * 1000);
 
 // Async DB adapter for withdrawalRoutes (which expects async db interface)
 const dbAdapter = {
@@ -278,10 +301,13 @@ app.post('/api/draw-from-balance', async (req, res) => {
 // --- Create Invoice (Play) ---
 app.post('/api/create-invoice', async (req, res) => {
   try {
+    console.log('Creating invoice for', PAYMENT_AMOUNT_SATS, 'sats with memo:', config.INVOICE_MEMO);
     const { hash, bolt11 } = await createInvoice(PAYMENT_AMOUNT_SATS, config.INVOICE_MEMO);
+    console.log('Invoice created:', hash);
     res.json({ payment_hash: hash, payment_request: bolt11 });
   } catch (e) {
-    console.error('Error creating invoice:', e.message);
+    console.error('ERROR creating invoice:', e.message);
+    console.error('Full error:', e);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to create invoice.' });
   }
 });
