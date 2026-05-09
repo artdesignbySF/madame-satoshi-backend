@@ -7,6 +7,7 @@ const fs = require("fs");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
 const { drawCards, calculateFortune, generateBlockSeed } = require("../../core/fortuneLogic.js");
+const { getLatestBlockHash, getCachedBlockInfo } = require("../../core/blockSeed.js");
 
 // Setup FFmpeg path for fluent-ffmpeg
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -26,7 +27,6 @@ const PROFIT_AMOUNT = 4;
 const JACKPOT_DB_KEY = "currentJackpotPool_v1";
 const STICKER_SET_NAME = "BitcoinTarot";
 const ADMIN_ID = parseInt(process.env.ADMIN_TELEGRAM_ID);
-const MEMPOOL_URL = process.env.MEMPOOL_API_URL || "http://localhost:8081";
 
 // Map card number (from fortuneLogic.js) → Telegram sticker file_ids.
 const STICKER_MAP = {
@@ -83,28 +83,6 @@ function hasReceivedBonus(userId) { return dbGet(`bonus_given_${userId}`) === tr
 function markBonusReceived(userId) { dbSet(`bonus_given_${userId}`, true); }
 
 if (getJackpot() <= 0) { updateJackpot(MIN_JACKPOT_SEED); console.log(`Jackpot seeded: ${MIN_JACKPOT_SEED} sats`); }
-
-// --- Block Hash Fetching ---
-let cachedBlockInfo = { height: null, hash: null, timestamp: null };
-
-async function getLatestBlockHash() {
-  try {
-    const url = MEMPOOL_URL + '/api/blocks/tip/hash';
-    console.log(`Fetching block hash from: ${url}`);
-    const [hashRes, heightRes] = await Promise.all([
-      axios.get(url, { timeout: 5000 }),
-      axios.get(MEMPOOL_URL + '/api/blocks/tip/height', { timeout: 5000 })
-    ]);
-    const hash = hashRes.data.trim();
-    const height = heightRes.data;
-    console.log(`Block hash fetched: #${height} ${hash}`);
-    cachedBlockInfo = { hash, height, timestamp: Date.now() };
-    return hash;
-  } catch (error) {
-    console.log(`Block hash fetch failed: ${error.message}`);
-    return null;
-  }
-}
 
 // --- Bot ---
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
@@ -513,7 +491,7 @@ async function performDraw(chatId, userId) {
 
     const fpDb = loadDb();
     fpDb[`draw_verify_${userId}`] = {
-      blockHeight: cachedBlockInfo.height,
+      blockHeight: getCachedBlockInfo().height,
       blockHash: fpBlockHash,
       cards: fpCards.map(c => c.number),
       timestamp: fpTimestamp
@@ -584,7 +562,7 @@ async function performDraw(chatId, userId) {
   // Store verification data (block hash, cards, timestamp)
   const db = loadDb();
   db[`draw_verify_${userId}`] = {
-    blockHeight: cachedBlockInfo.height,
+    blockHeight: getCachedBlockInfo().height,
     blockHash: blockHash,
     cards: cards.map(c => c.number),
     timestamp: timestamp
@@ -956,10 +934,11 @@ bot.onText(/\/msblock/, async (msg) => {
   const chatId = msg.chat.id;
   if (userId !== ADMIN_ID) return bot.sendMessage(chatId, "❌ Access denied. Admins only!");
 
+  const info = getCachedBlockInfo();
   const blockMessage = `*Latest Block Info*\n\n` +
-    `🔗 Block Height: ${cachedBlockInfo.height || 'Unknown'}\n` +
-    `📜 Block Hash:\n\`${cachedBlockInfo.hash || 'Unknown'}\`\n` +
-    `⏰ Last Updated: ${cachedBlockInfo.timestamp ? new Date(cachedBlockInfo.timestamp).toLocaleString() : 'N/A'}`;
+    `🔗 Block Height: ${info.height || 'Unknown'}\n` +
+    `📜 Block Hash:\n\`${info.hash || 'Unknown'}\`\n` +
+    `⏰ Last Updated: ${info.timestamp ? new Date(info.timestamp).toLocaleString() : 'N/A'}`;
 
   bot.sendMessage(chatId, blockMessage, { parse_mode: 'Markdown' });
 });
