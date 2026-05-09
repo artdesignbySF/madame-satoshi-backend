@@ -9,3 +9,5 @@ node_modules/
 *.png
 !.gitkeep
 CLAUDE.md
+*.csv
+*.backup
